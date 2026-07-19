@@ -1,0 +1,4 @@
+{% for board in boards %}
+
+<option value="{{ board.name }}" {% if board.name.as_str() == breadcrumbs[0] %}selected{% endif %}>/{{ board.name }}</option>
+{% endfor %}

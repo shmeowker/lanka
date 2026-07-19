@@ -1,0 +1,27 @@
+[package]
+name = "lanka"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.8.9", features = ["multipart"] }
+tower-http = { version = "0.5", features = ["fs"] }
+tokio = { version = "1", features = ["full"] }
+axum-server = { version = "0.8", features = ["tls-rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+serde = { version = "1.0", features = ["derive"] }
+# SQLx for MariaDB
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls", "mysql", "chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
+# Askama for HTML Templates
+askama = "0.16"
+serde_json = "1.0.150"
+derive_more = { version = "2.1.1", features = ["full"] }
+infer = "0.22.0"
+ffmpeg-next = "8.1.0"
+image = "0.25.10"
+futures-util = "0.3.32"
+uuid = { version = "1.24.0", features = ["v4"] }
+tower-livereload = "0.10.3"
+hex = "0.4.3"
+blake3 = "1.8.5"

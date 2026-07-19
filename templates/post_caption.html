@@ -1,0 +1,5 @@
+
+<header>
+	<b>{% if let Some(author) = author %}@{{ author }}{% if op is defined && op %} (OP){% endif %}{% else %}Anonymous{% endif %}</b>
+	<code>§{{ id }} {{ created.format("%d.%m.%Y %T UTC") }}</code>
+</header>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{ title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/main.css">
+    <script src="https://127.0.0.1:8443/assets/eruda.js" defer></script>
+  	<script src="/static/helpers.js" defer></script>
+	</head>
+  <body>
+    <header class="navbar">
+      <a href="/">
+     		<strong id="title">{{ title }}</strong>
+			</a>
+			<span>
+				<label for="boards">Board:</label>
+	      <select id="boards" onchange="window.location.href='/'+this.value">
+	        {% include "boards.html" %}
+	      </select>
+			</span>
+			<span>
+				<button popovertarget="new-post">
+					Post
+				</button>
+				<button>
+					@tester
+				</button>
+			</span>
+			<div id="menu" popover>
+				menu
+			</div>
+    </header>
+    <main>
+      <h1 class="path">
+        <nav class="breadcrumbs">
+          <ol>{% set path = "" %}{% for crumb in breadcrumbs %}{% set path = format!("{path}/{crumb}") %}
+            <li>
+							{% if loop.last %}{{ crumb }}{% else %}<a href="{{path}}">{{crumb}}</a>{% endif %}
+            </li>{% endfor %}
+          </ol>
+        </nav>
+      </h1>
+			<a href="#bottom" class="bottom">
+				<span>&darr;</span>
+			</a>
+      {{ posts|safe }}
+			<hr id="bottom">
+			<form 
+			id="new-post"
+			method="post"
+			enctype="multipart/form-data"
+			popover>
+				<fieldset>
+					<label for="reply">Reply to</label>
+					<input type="text" name="reply" id="reply">
+				</fieldset>
+				<fieldset>
+					<textarea name="content" id="content"></textarea>
+				</fieldset>
+				<fieldset>
+					<input type="file" name="attachments[]" multiple>
+				</fieldset>
+				<fieldset>
+					<span>
+						<input type="checkbox" name="anonymous" id="anonymous">
+						<label for="anonymous">Anonymous</label>
+					</span>
+					<button type="submit">Post</button>
+				</fieldset>
+			</form>
+    </main>
+  </body>
+</html>
