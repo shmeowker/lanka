@@ -48,7 +48,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 		.route("/{board}/{thread}", get(render_thread))
 		.layer(method_filter_layer)
 		.layer(DefaultBodyLimit::max(UPLOAD_SIZE_LIMIT))
-		.layer(tower_livereload::LiveReloadLayer::new())
 		.with_state(shared_state);
 	let config = RustlsConfig::from_pem_file(
 		"cert.pem", "key.pem"
@@ -127,7 +126,7 @@ async fn form_handler(
 			&_ => ()
 		}
 	}
-	if uploaded.get(0).is_some() {
+	if !uploaded.is_empty() {
 		attachments = Some(uploaded.join(","));
 	}
 	if attachments.is_none() && content.is_none() {
@@ -135,40 +134,42 @@ async fn form_handler(
 	}
 	match &location[..] {
 		[board] => {
-			if let Ok(_) = state.post.create_thread(
+			match state.post.create_thread(
 				board.to_string(),
 				reply,
 				content,
 				attachments,
 				author,
 			).await {
-				return Redirect::to(format!("/{}", board).as_str()).into_response();
-			} else {
-				return (StatusCode::BAD_REQUEST, "").into_response();
+				Ok(_) => return Redirect::to(format!("/{}", board).as_str()).into_response(),
+				Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "").into_response(),
 			}
-		}
+		},
 		[board, thread] => {
-			if let Ok(thread) = thread.parse::<u64>() {
-				if None == state.post.get(thread).await {
-					return (StatusCode::BAD_REQUEST, "").into_response();
-				} else {
-					let result = state.post.create_in_thread(
-						board.to_string(),
-						thread,
-						reply,
-						content,
-						attachments,
-						author,
-					).await;
-					match result {
-						Ok(_) => Redirect::to(format!("/{}/{}", board, thread).as_str()).into_response(),
-						Err(err) => (StatusCode::OK, format!("{}", err)).into_response(),
+			match thread.parse::<u64>() {
+				Ok(thread) => {
+					match state.post.get(thread).await {
+						Some(_) => {
+							match state.post.create_in_thread(
+								board.to_string(),
+								thread,
+								reply,
+								content,
+								attachments,
+								author,
+							).await {
+								Ok(_) => Redirect::to(format!("/{}/{}", board, thread).as_str()).into_response(),
+								Err(err) => (StatusCode::OK, format!("{}", err)).into_response(),
+							}
+						}
+						None => return (StatusCode::BAD_REQUEST, "").into_response(),
 					}
 				}
-			} else {
-				return (StatusCode::OK, "Invalid form data.").into_response();
+				Err(_) => {
+					return (StatusCode::BAD_REQUEST, "").into_response();
+				}
 			}
-		}
+		},
 		_ => {
 			return (StatusCode::OK, "Invalid form data.").into_response();
 		}
