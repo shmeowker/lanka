@@ -118,7 +118,7 @@ async fn form_handler(
 					author = None;
 				}
 			}
-			"attachments[]" => {
+			"attachments" => {
 				if let Some(filename) = helpers::handle_file_upload(field).await {
 					uploaded.push(filename);
 				}
@@ -130,7 +130,7 @@ async fn form_handler(
 		attachments = Some(uploaded.join(","));
 	}
 	if attachments.is_none() && content.is_none() {
-		return (StatusCode::BAD_REQUEST, "").into_response();
+		return (StatusCode::BAD_REQUEST, "No valid content provided.").into_response();
 	}
 	match &location[..] {
 		[board] => {
@@ -162,16 +162,16 @@ async fn form_handler(
 								Err(err) => (StatusCode::OK, format!("{}", err)).into_response(),
 							}
 						}
-						None => return (StatusCode::BAD_REQUEST, "").into_response(),
+						None => return (StatusCode::BAD_REQUEST, "Invalid thread ID.").into_response(),
 					}
 				}
 				Err(_) => {
-					return (StatusCode::BAD_REQUEST, "").into_response();
+					return (StatusCode::BAD_REQUEST, "Invalid thread.").into_response();
 				}
 			}
 		},
 		_ => {
-			return (StatusCode::OK, "Invalid form data.").into_response();
+			return (StatusCode::BAD_REQUEST, "Invalid endpoint.").into_response();
 		}
 	}
 }
