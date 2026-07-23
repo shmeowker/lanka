@@ -22,13 +22,29 @@
 				<button popovertarget="new-post">
 					Post
 				</button>
-				<button>
+				<button popovertarget="login">
 					@tester
 				</button>
 			</span>
-			<div id="menu" popover>
-				menu
-			</div>
+			<form id="login" popover method="post">
+				<legend>Login</legend>
+				<fieldset>
+					<legend>Name or email</legend>
+					<input type="text" required
+						placeholder="Username or email">
+				</fieldset>
+				<fieldset>
+					<legend>Password</legend>
+					<input type="password" required 
+						placeholder="Password">
+				</fieldset>
+				<hr>
+				<fieldset>
+					<small><a href="#">Forgot password?</a></small>
+					<button>Register</button>
+					<button type="submit">Login</button>
+				</fieldset>
+			</form>
     </header>
     <main>
       <h1 class="path">

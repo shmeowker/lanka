@@ -36,6 +36,12 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0;
 }
 
+hr {
+	border: none;
+	background-color: var(--bg-bright);
+	height: 1px;
+}
+
 body {
   color: var(--default);
   margin: 0;
@@ -130,7 +136,7 @@ form {
 	color: inherit;
 	border: 1px solid var(--bg-bright);
 	border-radius: 3px;
-	& legend {
+	& > legend {
 		text-align: center;
 		font-weight: 800;
 	}
@@ -141,6 +147,13 @@ form {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		& input[type="text"],
+		& input[type="password"] {
+			width: 100%;
+		}
+		& > legend {
+			font-size: .75rem;
+		}
 		&:not(:has(legend)) {
 			border: none;
 			padding: 0;
@@ -193,7 +206,7 @@ form {
     opacity: 0;
     visibility: hidden;
   }
-  1%, 95% {
+  5%, 95% {
     opacity: 1;
     visibility: visible;
   }

@@ -31,22 +31,18 @@ use derive_more::Deref;
 
 mod helpers;
 
-const TITLE: &str = "Lanka";
+const TITLE: &str = "lanka";
 const DATABASE: &str = "mysql://root:password@127.0.0.1:3306/lanka";
 const UPLOAD_SIZE_LIMIT: usize = 100 * 1048576;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
 	let shared_state = Arc::new(AppState::new().await);
-	let method_filter_layer = middleware::from_fn_with_state(
-		shared_state.clone(), distributor
-	);
 	let mut app = Router::new()
 		.nest_service("/static", ServeDir::new("static"))
 		.nest_service("/attachments", ServeDir::new("attachments"))
-		.route("/{board}", get(render_board))
-		.route("/{board}/{thread}", get(render_thread))
-		.layer(method_filter_layer)
+		.route("/{board}", get(render_board).post(create_thread))
+		.route("/{board}/{thread}", get(render_thread).post(create_post))
 		.layer(DefaultBodyLimit::max(UPLOAD_SIZE_LIMIT))
 		.with_state(shared_state);
 	let config = RustlsConfig::from_pem_file(
@@ -61,33 +57,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 
-async fn distributor(
-	state: State,
-	request: Request<Body>,
-	next: Next
-) -> impl IntoResponse {
-	if request.method() == Method::POST {
-		let (mut parts, body) = request.into_parts();
-		let path = match Path::<Vec<String>>::from_request_parts(&mut parts, &state).await {
-			Ok(p) => p,
-			Err(err) => return err.into_response(),
-		};
-		let multipart = match Multipart::from_request(Request::from_parts(parts, body), &state).await {
-			Ok(m) => m,
-			Err(err) => return err.into_response(),
-		};
-		return form_handler(state, path, multipart).await;
-	}
-	return next.run(request).await;
-}
 
-
-async fn form_handler(
-	state: State,
-	Path(location): Path<Vec<String>>,
+async fn parse_create_form(
+	state: &State,
 	mut multipart: Multipart
-) -> Response<Body> {
-	let mut thread: Option<u64> = None;
+) -> Result<(Option<u64>, Option<String>, Option<String>, Option<String>), Response> {
 	let mut reply: Option<u64> = None;
 	let mut content: Option<String> = None;
 	let mut attachments: Option<String> = None;
@@ -100,7 +74,7 @@ async fn form_handler(
 		match name.as_str() {
 			"reply" => {
 				if let Ok(number) = field.text().await.unwrap_or_default().parse::<u64>() {
-					if let Some(reply_post) = state.post.get(number).await {
+					if let Some(reply_post) = &state.post.get(number).await {
 						reply = Some(reply_post.id);
 					}
 				}
@@ -130,8 +104,19 @@ async fn form_handler(
 		attachments = Some(uploaded.join(","));
 	}
 	if attachments.is_none() && content.is_none() {
-		return (StatusCode::BAD_REQUEST, "No valid content provided.").into_response();
+		return Err((StatusCode::BAD_REQUEST, "No valid content provided.").into_response());
 	}
+
+	Ok((reply, content, attachments, author))
+}
+
+
+async fn create_thread(
+	state: State,
+	Path(location): Path<Vec<String>>,
+	mut multipart: Multipart
+) -> Result<Response, Response> {
+	let (reply, content, attachments, author) = parse_create_form(&state, multipart).await?;
 	match &location[..] {
 		[board] => {
 			match state.post.create_thread(
@@ -141,10 +126,24 @@ async fn form_handler(
 				attachments,
 				author,
 			).await {
-				Ok(_) => return Redirect::to(format!("/{}", board).as_str()).into_response(),
-				Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "").into_response(),
+				Ok(_) => return Ok(Redirect::to(format!("/{}", board).as_str()).into_response()),
+				Err(_) => return Err((StatusCode::INTERNAL_SERVER_ERROR, "Error during thread creation.").into_response()),
 			}
 		},
+		_ => {
+			return Err((StatusCode::BAD_REQUEST, "Invalid form URL.").into_response());
+		}
+	}
+}
+
+async fn create_post(
+	state: State,
+	Path(location): Path<Vec<String>>,
+	mut multipart: Multipart
+) -> Result<Response, Response> {
+	let mut thread: Option<u64> = None;
+	let (reply, content, attachments, author) = parse_create_form(&state, multipart).await?;
+	match &location[..] {
 		[board, thread] => {
 			match thread.parse::<u64>() {
 				Ok(thread) => {
@@ -158,20 +157,20 @@ async fn form_handler(
 								attachments,
 								author,
 							).await {
-								Ok(_) => Redirect::to(format!("/{}/{}", board, thread).as_str()).into_response(),
-								Err(err) => (StatusCode::OK, format!("{}", err)).into_response(),
+								Ok(_) => Ok(Redirect::to(format!("/{}/{}", board, thread).as_str()).into_response()),
+								Err(err) => Err((StatusCode::OK, format!("{}", err)).into_response()),
 							}
 						}
-						None => return (StatusCode::BAD_REQUEST, "Invalid thread ID.").into_response(),
+						None => return Err((StatusCode::BAD_REQUEST, "Invalid thread ID.").into_response()),
 					}
 				}
 				Err(_) => {
-					return (StatusCode::BAD_REQUEST, "Invalid thread.").into_response();
+					return Err((StatusCode::BAD_REQUEST, "Invalid thread.").into_response());
 				}
 			}
-		},
+		}
 		_ => {
-			return (StatusCode::BAD_REQUEST, "Invalid endpoint.").into_response();
+			return Err((StatusCode::BAD_REQUEST, "Invalid form URL.").into_response());
 		}
 	}
 }
