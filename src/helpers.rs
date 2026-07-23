@@ -46,7 +46,7 @@ pub async fn handle_file_upload(
 		};
 		if first {
 			if bytes.is_empty() {
-				remove_file(temp_path);
+				remove_file(temp_path).await;
 				return None;
 			}
 			mime_type = match infer::get(&bytes) {
