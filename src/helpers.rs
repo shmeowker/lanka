@@ -1,75 +1,7 @@
-use axum::extract::multipart::{Field, MultipartError};
-use axum::http::StatusCode;
-use axum::body::Bytes;
-use futures_util::stream::{Stream, StreamExt};
-//use std::pin::Pin;
-use std::io::Write;
-use std::path::Path;
-use std::error::Error;
-use tokio::fs::{remove_file, rename, File};
-use tokio::io::AsyncWriteExt;
+
 //use image::{ImageReader, codecs::jpeg::JpegEncoder};
-use uuid::Uuid;
+//use std::pin::Pin;
 
-
-pub async fn handle_file_upload(
-	mut field: Field<'_>
-) -> Option<String> {
-	let mut ext = field.file_name()
-		.and_then(|name| {
-			if name.is_empty() {
-				return None;
-			}
-			Path::new(name).extension()
-		})
-    .and_then(|ext| ext.to_str())
-    .unwrap_or("")
-		.to_string();
-	if ext != "".to_string() {
-		ext = format!(".{}", ext)
-	}
-	let uuid = Uuid::new_v4();
-	let mut name = format!("{}.stream", uuid);
-	let temp_path = Path::new("attachments/").join(&name);
-
-	let mut hasher = blake3::Hasher::new();
-	let mut file = File::create(&temp_path).await.unwrap();
-	let mut mime_type = "application/octet-stream".to_string();
-	let mut first = true;
-	while let Some(chunk) = field.next().await {
-		let bytes = match chunk {
-			Ok(data) => data,
-			Err(_) => {
-				remove_file(temp_path);
-				return None;
-			}
-		};
-		if first {
-			if bytes.is_empty() {
-				remove_file(temp_path).await;
-				return None;
-			}
-			mime_type = match infer::get(&bytes) {
-				Some(kind) => kind.mime_type().to_string(),
-				None => "application/octet-stream".to_string(),
-			};
-			first = false;
-		}
-		hasher.update(&bytes);
-		file.write_all(&bytes).await;
-	}
-	file.flush().await.ok();
-	
-	let mut output = [0u8; 16]; 
-	hasher.finalize_xof().fill(&mut output);
-	let file_hash = hex::encode(output);
-	
-	name = format!("{}{}", file_hash, ext);
-	let path = temp_path.with_file_name(&name);
-	rename(temp_path, path).await.ok();
-	
-	Some(name)
-}
 
 
 

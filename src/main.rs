@@ -1,5 +1,5 @@
-use askama::Template;
-use axum::{
+pub use askama::Template;
+pub use axum::{
 	Router,
 	body::Body,
 	http::{StatusCode, Method},
@@ -13,32 +13,38 @@ use axum::{
 		DefaultBodyLimit,
 	},
 	response::{Html, IntoResponse, Json, Response, Redirect},
-	middleware::{self, Next},
+	middleware::Next,
 	routing::{get, post},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use sqlx::{MySqlPool, FromRow};
 use std::{
 	net::SocketAddr, 
-	sync::Arc, 
-	error::Error
+	sync::Arc,
+	error::Error,
 };
 use tower_http::services::ServeDir;
 use axum_server::tls_rustls::RustlsConfig;
-//use tokio::task_local;
 use chrono::{DateTime, Utc};
 use derive_more::Deref;
+//use tokio::task_local;
 
-mod helpers;
+mod form_handlers;
+mod get_handlers;
 
-const TITLE: &str = "lanka";
+use form_handlers::*;
+use get_handlers::*;
+
+const TITLE: &str = "Lanka";
 const DATABASE: &str = "mysql://root:password@127.0.0.1:3306/lanka";
 const UPLOAD_SIZE_LIMIT: usize = 100 * 1048576;
+const HOST: ([u8; 4], u16) = ([127, 0, 0, 1], 8888);
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
 	let shared_state = Arc::new(AppState::new().await);
-	let mut app = Router::new()
+	let app = Router::new()
 		.nest_service("/static", ServeDir::new("static"))
 		.nest_service("/attachments", ServeDir::new("attachments"))
 		.route("/{board}", get(render_board).post(create_thread))
@@ -48,7 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 	let config = RustlsConfig::from_pem_file(
 		"cert.pem", "key.pem"
 	).await?;
-	let addr = SocketAddr::from(([127, 0, 0, 1], 8888));
+	let addr = SocketAddr::from(HOST);
 	println!("Starting server on https://{}", addr);
 	axum_server::bind_rustls(addr, config)
 		.serve(app.into_make_service())
@@ -56,124 +62,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 	Ok(())
 }
 
-
-
-async fn parse_create_form(
-	state: &State,
-	mut multipart: Multipart
-) -> Result<(Option<u64>, Option<String>, Option<String>, Option<String>), Response> {
-	let mut reply: Option<u64> = None;
-	let mut content: Option<String> = None;
-	let mut attachments: Option<String> = None;
-	let mut author: Option<String> = Some("tester".to_string());
-
-	let mut uploaded: Vec<String> = vec![];
-	
-	while let Some(field) = multipart.next_field().await.unwrap() {
-		let name = field.name().unwrap_or_default().to_string();
-		match name.as_str() {
-			"reply" => {
-				if let Ok(number) = field.text().await.unwrap_or_default().parse::<u64>() {
-					if let Some(reply_post) = &state.post.get(number).await {
-						reply = Some(reply_post.id);
-					}
-				}
-			}
-			"content" => {
-				content = match field.text().await.ok() {
-					Some(empty) if empty == "".to_string() => None,
-					Some(nonempty) => Some(nonempty),
-					None => None,
-				};
-			}
-			"anonymous" => {
-				let text = field.text().await.unwrap_or_default();
-				if text == "on" || text == "true" {
-					author = None;
-				}
-			}
-			"attachments" => {
-				if let Some(filename) = helpers::handle_file_upload(field).await {
-					uploaded.push(filename);
-				}
-			}
-			&_ => ()
-		}
-	}
-	if !uploaded.is_empty() {
-		attachments = Some(uploaded.join(","));
-	}
-	if attachments.is_none() && content.is_none() {
-		return Err((StatusCode::BAD_REQUEST, "No valid content provided.").into_response());
-	}
-
-	Ok((reply, content, attachments, author))
-}
-
-
-async fn create_thread(
-	state: State,
-	Path(location): Path<Vec<String>>,
-	mut multipart: Multipart
-) -> Result<Response, Response> {
-	let (reply, content, attachments, author) = parse_create_form(&state, multipart).await?;
-	match &location[..] {
-		[board] => {
-			match state.post.create_thread(
-				board.to_string(),
-				reply,
-				content,
-				attachments,
-				author,
-			).await {
-				Ok(_) => return Ok(Redirect::to(format!("/{}", board).as_str()).into_response()),
-				Err(_) => return Err((StatusCode::INTERNAL_SERVER_ERROR, "Error during thread creation.").into_response()),
-			}
-		},
-		_ => {
-			return Err((StatusCode::BAD_REQUEST, "Invalid form URL.").into_response());
-		}
-	}
-}
-
-async fn create_post(
-	state: State,
-	Path(location): Path<Vec<String>>,
-	mut multipart: Multipart
-) -> Result<Response, Response> {
-	let mut thread: Option<u64> = None;
-	let (reply, content, attachments, author) = parse_create_form(&state, multipart).await?;
-	match &location[..] {
-		[board, thread] => {
-			match thread.parse::<u64>() {
-				Ok(thread) => {
-					match state.post.get(thread).await {
-						Some(_) => {
-							match state.post.create_in_thread(
-								board.to_string(),
-								thread,
-								reply,
-								content,
-								attachments,
-								author,
-							).await {
-								Ok(_) => Ok(Redirect::to(format!("/{}/{}", board, thread).as_str()).into_response()),
-								Err(err) => Err((StatusCode::OK, format!("{}", err)).into_response()),
-							}
-						}
-						None => return Err((StatusCode::BAD_REQUEST, "Invalid thread ID.").into_response()),
-					}
-				}
-				Err(_) => {
-					return Err((StatusCode::BAD_REQUEST, "Invalid thread.").into_response());
-				}
-			}
-		}
-		_ => {
-			return Err((StatusCode::BAD_REQUEST, "Invalid form URL.").into_response());
-		}
-	}
-}
 
 
 /*
@@ -218,7 +106,7 @@ impl UserManager {
 */
 
 
-#[derive(FromRow, Deserialize, Clone)]
+#[derive(FromRow, Deserialize)]
 struct Board {
 	name: String,
 	title: String,
@@ -298,34 +186,16 @@ impl PostManager {
 			.await;
 		return post.ok();
 	}
-	async fn create_thread(
-		&self,
-		board: String,
-		reply: Option<u64>,
-		content: Option<String>,
-		attachments: Option<String>,
-		author: Option<String>,
-	) -> Result<(), sqlx::Error> {
-		let result = sqlx::query("INSERT INTO posts(board, reply, content, attachments, author) values(?, ?, ?, ?, ?)")
-			.bind(board)
-			.bind(reply)
-			.bind(content)
-			.bind(attachments)
-			.bind(author)
-			.execute(&self.pool)
-			.await?;
-		Ok(())
-	}
-	async fn create_in_thread(
+	async fn create(
 		&self, 
 		board: String, 
-		thread: u64,
+		thread: Option<u64>,
 		reply: Option<u64>,
 		content: Option<String>,
 		attachments: Option<String>,
 		author: Option<String>,
 	) -> Result<(), sqlx::Error> {
-		let _ = sqlx::query("INSERT INTO posts(board, thread, reply, content, attachments, author) values(?, ?, ?, ?, ?, ?)")
+		sqlx::query("INSERT INTO posts(board, thread, reply, content, attachments, author) values(?, ?, ?, ?, ?, ?)")
 			.bind(board)
 			.bind(&thread)
 			.bind(reply)
@@ -334,10 +204,12 @@ impl PostManager {
 			.bind(author)
 			.execute(&self.pool)
 			.await?;
-		let _ = sqlx::query("UPDATE posts SET bumped = current_timestamp() WHERE id = ?")
-			.bind(thread)
-			.execute(&self.pool)
-			.await?;
+		if thread.is_some() {
+			sqlx::query("UPDATE posts SET bumped = current_timestamp() WHERE id = ?")
+				.bind(thread)
+				.execute(&self.pool)
+				.await?;
+		}
 		Ok(())
 	}
 	async fn board(&self, board: &String) -> Vec<Post<ThreadTemplate>> {
@@ -364,22 +236,20 @@ impl PostManager {
 			.fetch_all(&self.pool)
 			.await
 			.unwrap();
-		let mut op_name: Option<String> = None;
 		let mut op_posts: Vec<u64> = vec![];
 		if let Some(first) = raw.get(0) {
-			op_name = first.author.clone();
+			let op_name = first.author.clone();
 			op_posts = raw
 				.iter()
 				.filter_map(|post| {
-					if post.author.is_some() && op_name.is_some() {
+					if post.author.is_some() && op_name.is_some() && post.author == op_name {
 						return Some(post.id);
 					}
 					None
 				})
 				.collect();
 		}
-		let posts: Vec<Post<PostTemplate>> = raw
-			.into_iter()
+		raw.into_iter()
 			.map(|post| {
 				let mut op = false;
 				let mut reply_op = false;
@@ -398,8 +268,7 @@ impl PostManager {
 					}
 				}
 			})
-			.collect();
-		return posts;
+			.collect()
 	}
 }
 
@@ -428,7 +297,7 @@ impl AppState {
 		
 		Self { 
 			post: PostManager { pool: pool.clone() },
-			board: BoardManager { pool: pool.clone() },
+			board: BoardManager { pool: pool },
 		}
 	}
 }
@@ -504,36 +373,3 @@ impl BoardTemplate {
 }
 
 
-async fn render_board(
-	Path(board): Path<String>,
-	state: State,
-) -> Result<HtmlTemplate<BoardTemplate>, (StatusCode, String)> {
-	let posts = state.post.board(&board).await;
-
-	let template = BoardTemplate::new(
-		state,
-		vec![format!("{board}")],
-		posts,
-	).await;
-
-	Ok(HtmlTemplate(template))
-}
-
-
-async fn render_thread(
-	Path((board, thread)): Path<(String, u64)>,
-	state: State,
-) -> Result<HtmlTemplate<BoardTemplate>, (StatusCode, String)> {
-	let posts = state.post.thread(&thread).await;
-	
-	let template = BoardTemplate::new(
-		state,
-		vec![
-			format!("{board}"),
-			format!("{thread}"),
-		],
-		posts,
-	).await;
-
-	Ok(HtmlTemplate(template))
-}
