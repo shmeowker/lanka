@@ -6,7 +6,9 @@ use tokio::fs::{remove_file, rename, File};
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
-use super::{ State, Redirect, Path, IntoResponse, Response};
+use super::{
+	State, Redirect, Path, IntoResponse, Response
+};
 
 
 async fn handle_file_upload(
@@ -85,9 +87,7 @@ async fn parse_create_form(
 		match name.as_str() {
 			"reply" => {
 				if let Ok(number) = field.text().await.unwrap_or_default().parse::<u64>() {
-					if let Some(reply_post) = &state.post.get(number).await {
-						reply = Some(reply_post.id);
-					}
+					reply = Some(number);
 				}
 			}
 			"content" => {

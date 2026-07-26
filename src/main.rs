@@ -120,12 +120,12 @@ struct BoardManager {
 impl BoardManager {
 	async fn list(&self) -> Vec<Board> {
 		let query: &str = "SELECT * FROM boards";
-		let boards = sqlx::query_as::<_, Board>(query)
+		sqlx::query_as::<_, Board>(query)
 			.fetch_all(&self.pool)
 			.await
-			.unwrap();
-		return boards;
+			.unwrap_or(vec![])
 	}
+	//async fn exists(&self, id: String) -> bool {}
 }
 
 
@@ -180,11 +180,11 @@ struct PostManager {
 impl PostManager {
 	async fn get(&self, id: u64) -> Option<PostData> {
 		let query: &str = "SELECT * FROM posts WHERE id = ?";
-		let post = sqlx::query_as::<_, PostData>(query)
+		sqlx::query_as::<_, PostData>(query)
 			.bind(id)
 			.fetch_one(&self.pool)
-			.await;
-		return post.ok();
+			.await
+			.ok()
 	}
 	async fn create(
 		&self, 
@@ -218,15 +218,13 @@ impl PostManager {
 			.bind(&board)
 			.fetch_all(&self.pool)
 			.await
-			.unwrap();
-		let threads: Vec<Post<ThreadTemplate>> = raw
-			.into_iter()
+			.unwrap_or(vec![]);
+		raw.into_iter()
 			.map(|post| Post {
 				data: post.clone(), 
 				template: ThreadTemplate(post)
 			})
-			.collect();
-		return threads;
+			.collect()
 	}
 	async fn thread(&self, thread: &u64) -> Vec<Post<PostTemplate>> {
 		let query: &str = "SELECT * FROM posts WHERE (id = ? AND IFNULL(thread, 0) = 0) OR thread = ?";
@@ -235,7 +233,7 @@ impl PostManager {
 			.bind(&thread)
 			.fetch_all(&self.pool)
 			.await
-			.unwrap();
+			.unwrap_or(vec![]);
 		let mut op_posts: Vec<u64> = vec![];
 		if let Some(first) = raw.get(0) {
 			let op_name = first.author.clone();
