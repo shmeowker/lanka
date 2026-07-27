@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub use askama::Template;
 pub use axum::{
 	Router,
@@ -85,7 +87,6 @@ impl DatabaseQuery {
 		}
 	}
 }
-
 
 
 /*
