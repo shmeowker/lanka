@@ -62,6 +62,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
 	Ok(())
 }
 
+#[derive(Clone, Copy)]
+enum DatabaseQuery {
+	ListBoards,
+	BoardExists,
+	GetPost,
+	ListThreads,
+	ListThreadPosts,
+	CreatePost,
+	BumpThread,
+}
+impl DatabaseQuery {
+	fn as_str(&self) -> &str {
+		match &self {
+			Self::ListBoards => "get * from boards",
+			Self::BoardExists => "select exists(select 1 from boards where id = ?)",
+			Self::GetPost => "select * from posts where id = ?",
+			Self::ListThreads => "select * from posts where board = ? and ifnull(thread, 0) = 0 order by bumped desc",
+			Self::ListThreadPosts => "select * from posts where id = ? or thread = ?",
+			Self::CreatePost => "insert into posts(board, thread, reply, content, attachments, author) values(?, ?, ?, ?, ?, ?)",
+			Self::BumpThread => "update posts SET bumped = current_timestamp() where id = ?",
+		}
+	}
+}
+
 
 
 /*
@@ -74,26 +98,14 @@ struct User {
 	email: Option<String>,
 }
 struct UserManager {
-	pool: &MySqlPool,
+	pool: MySqlPool,
 }
 impl UserManager {
-	fn new(state: State) -> Self {
-		Self { &state.pool }
-	}
-	fn anonymous() -> User {
-		User { 
-			name: "Anon".to_string(), 
-			..Default::default()
-		}
-	}
-	async fn get(self: Self, id: u64) -> Option<User> {
-		let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = ?;")
+	async fn get(-self: Self, id: u64) -> Option<User> {
+		sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = ?;")
 			.bind(id)
-			.fetch_optional(self.pool)
+			.fetch_optional(&self.pool)
 			.await
-			.ok()
-			.flatten();
-		Some(user?)
 	}
 	async fn create(self: Self, name: String, password: String, email: String) {
 		sqlx::query("INSERT INTO users(name, password, email) values(?, ?, ?);")
@@ -119,13 +131,20 @@ struct BoardManager {
 }
 impl BoardManager {
 	async fn list(&self) -> Vec<Board> {
-		let query: &str = "SELECT * FROM boards";
+		let query = DatabaseQuery::ListBoards.as_str();
 		sqlx::query_as::<_, Board>(query)
 			.fetch_all(&self.pool)
 			.await
 			.unwrap_or(vec![])
 	}
-	//async fn exists(&self, id: String) -> bool {}
+	async fn exists(&self, name: String) -> bool {
+		let query = DatabaseQuery::BoardExists.as_str();
+		sqlx::query_scalar(query)
+			.bind(name)
+			.fetch_one(&self.pool)
+			.await
+			.unwrap_or(false)
+	}
 }
 
 
@@ -179,7 +198,7 @@ struct PostManager {
 }
 impl PostManager {
 	async fn get(&self, id: u64) -> Option<PostData> {
-		let query: &str = "SELECT * FROM posts WHERE id = ?";
+		let query = DatabaseQuery::GetPost.as_str();
 		sqlx::query_as::<_, PostData>(query)
 			.bind(id)
 			.fetch_one(&self.pool)
@@ -195,7 +214,8 @@ impl PostManager {
 		attachments: Option<String>,
 		author: Option<String>,
 	) -> Result<(), sqlx::Error> {
-		sqlx::query("INSERT INTO posts(board, thread, reply, content, attachments, author) values(?, ?, ?, ?, ?, ?)")
+		let query = DatabaseQuery::CreatePost.as_str();
+		sqlx::query(query)
 			.bind(board)
 			.bind(&thread)
 			.bind(reply)
@@ -205,7 +225,8 @@ impl PostManager {
 			.execute(&self.pool)
 			.await?;
 		if thread.is_some() {
-			sqlx::query("UPDATE posts SET bumped = current_timestamp() WHERE id = ?")
+			let query = DatabaseQuery::BumpThread.as_str();
+			sqlx::query(query)
 				.bind(thread)
 				.execute(&self.pool)
 				.await?;
@@ -213,7 +234,7 @@ impl PostManager {
 		Ok(())
 	}
 	async fn board(&self, board: &String) -> Vec<Post<ThreadTemplate>> {
-		let query: &str = "SELECT * FROM posts WHERE board = ? AND IFNULL(thread, 0) = 0 ORDER BY bumped DESC";
+		let query = DatabaseQuery::ListThreads.as_str();
 		let raw = sqlx::query_as::<_, PostData>(query)
 			.bind(&board)
 			.fetch_all(&self.pool)
@@ -227,10 +248,10 @@ impl PostManager {
 			.collect()
 	}
 	async fn thread(&self, thread: &u64) -> Vec<Post<PostTemplate>> {
-		let query: &str = "SELECT * FROM posts WHERE (id = ? AND IFNULL(thread, 0) = 0) OR thread = ?";
+		let query = DatabaseQuery::ListThreadPosts.as_str();
 		let raw = sqlx::query_as::<_, PostData>(query)
 			.bind(&thread)
-			.bind(&thread)
+			.bind(thread)
 			.fetch_all(&self.pool)
 			.await
 			.unwrap_or(vec![]);
@@ -239,7 +260,8 @@ impl PostManager {
 			let op_name = first.author.clone();
 			op_posts = raw
 				.iter()
-				.filter_map(|post| {
+				.filter_map(
+					|post| {
 					if post.author.is_some() && op_name.is_some() && post.author == op_name {
 						return Some(post.id);
 					}
@@ -362,8 +384,8 @@ impl BoardTemplate {
 			posts: posts
 				.iter()
 				.map(
-					|item|
-					item.template.render().unwrap()
+					|post|
+					post.template.render().unwrap()
 				)
 				.collect(),
 		}

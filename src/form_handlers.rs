@@ -72,7 +72,6 @@ async fn handle_file_upload(
 
 
 async fn parse_create_form(
-	state: &State,
 	mut multipart: Multipart
 ) -> Result<(Option<u64>, Option<String>, Option<String>, Option<String>), Response> {
 	let mut reply: Option<u64> = None;
@@ -127,7 +126,12 @@ pub async fn create_thread(
 	Path(location): Path<Vec<String>>,
 	multipart: Multipart
 ) -> Result<Response, Response> {
-	let (reply, content, attachments, author) = parse_create_form(&state, multipart).await?;
+	let (
+		reply,
+		content,
+		attachments,
+		author,
+	) = parse_create_form(multipart).await?;
 	match &location[..] {
 		[board] => {
 			match state.post.create(
@@ -139,7 +143,7 @@ pub async fn create_thread(
 				author,
 			).await {
 				Ok(_) => return Ok(Redirect::to(format!("/{}", board).as_str()).into_response()),
-				Err(_) => return Err((StatusCode::INTERNAL_SERVER_ERROR, "Error during thread creation.").into_response()),
+				Err(_) => return Err((StatusCode::INTERNAL_SERVER_ERROR, "Error during database call.").into_response()),
 			}
 		},
 		_ => {
@@ -153,7 +157,12 @@ pub async fn create_post(
 	Path(location): Path<Vec<String>>,
 	multipart: Multipart
 ) -> Result<Response, Response> {
-	let (reply, content, attachments, author) = parse_create_form(&state, multipart).await?;
+	let (
+		reply,
+		content,
+		attachments,
+		author,
+	) = parse_create_form(multipart).await?;
 	match &location[..] {
 		[board, thread] => {
 			match thread.parse::<u64>() {
