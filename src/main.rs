@@ -77,7 +77,7 @@ enum DatabaseQuery {
 impl DatabaseQuery {
 	fn as_str(&self) -> &str {
 		match &self {
-			Self::ListBoards => "get * from boards",
+			Self::ListBoards => "select * from boards",
 			Self::BoardExists => "select exists(select 1 from boards where id = ?)",
 			Self::GetPost => "select * from posts where id = ?",
 			Self::ListThreads => "select * from posts where board = ? and ifnull(thread, 0) = 0 order by bumped desc",
