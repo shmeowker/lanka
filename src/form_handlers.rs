@@ -10,6 +10,8 @@ use super::{
 	State, Redirect, Path, IntoResponse, Response
 };
 
+type ParsedPostFields = (Option<u64>, Option<String>, Option<String>, Option<String>);
+
 
 async fn handle_file_upload(
 	mut field: Field<'_>
@@ -28,44 +30,38 @@ async fn handle_file_upload(
 		ext = format!(".{}", ext)
 	}
 	let uuid = Uuid::new_v4();
-	let mut name = format!("{}.stream", uuid);
+	let name = format!("{}.stream", uuid);
 	let temp_path = StdPath::new("attachments/").join(&name);
+	
+	let abort = || {
+		tokio::spawn(remove_file(temp_path.to_owned()));
+		None
+	};
 
 	let mut hasher = blake3::Hasher::new();
 	let mut file = File::create(&temp_path).await.unwrap();
-	//let mut mime_type = "application/octet-stream".to_string();
 	let mut first = true;
 	while let Some(chunk) = field.next().await {
 		let bytes = match chunk {
 			Ok(data) => data,
-			Err(_) => {
-				remove_file(temp_path).await.ok();
-				return None;
-			}
+			Err(_) => return abort(),
 		};
 		if first {
-			if bytes.is_empty() {
-				remove_file(temp_path).await.ok();
-				return None;
-			}
-			// mime_type = match infer::get(&bytes) {
-			// 	Some(kind) => kind.mime_type().to_string(),
-			// 	None => "application/octet-stream".to_string(),
-			// };
+			if bytes.is_empty() { return abort() }
 			first = false;
 		}
 		hasher.update(&bytes);
 		let _ = file.write_all(&bytes).await;
 	}
-	file.flush().await.ok();
+	if file.flush().await.is_err() { return abort() }
 	
 	let mut output = [0u8; 16]; 
 	hasher.finalize_xof().fill(&mut output);
 	let file_hash = hex::encode(output);
 	
-	name = format!("{}{}", file_hash, ext);
+	let name = format!("{}{}", file_hash, ext);
 	let path = temp_path.with_file_name(&name);
-	rename(temp_path, path).await.ok();
+	let _ = rename(temp_path, path).await;
 	
 	Some(name)
 }
@@ -73,7 +69,7 @@ async fn handle_file_upload(
 
 async fn parse_create_form(
 	mut multipart: Multipart
-) -> Result<(Option<u64>, Option<String>, Option<String>, Option<String>), Response> {
+) -> Result<ParsedPostFields, Response> {
 	let mut reply: Option<u64> = None;
 	let mut content: Option<String> = None;
 	let mut attachments: Option<String> = None;

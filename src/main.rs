@@ -19,7 +19,13 @@ pub use axum::{
 	routing::{get, post},
 };
 use serde::{Deserialize};
-use sqlx::{MySqlPool, FromRow};
+use sqlx::{
+	MySqlPool, 
+	FromRow, 
+	SqlSafeStr,
+	AssertSqlSafe, 
+	SqlStr,
+};
 use std::{
 	net::SocketAddr, 
 	sync::Arc,
@@ -29,7 +35,6 @@ use tower_http::services::ServeDir;
 use axum_server::tls_rustls::RustlsConfig;
 use chrono::{DateTime, Utc};
 use derive_more::Deref;
-//use tokio::task_local;
 
 mod form_handlers;
 mod get_handlers;
@@ -37,10 +42,10 @@ mod get_handlers;
 use form_handlers::*;
 use get_handlers::*;
 
-const TITLE: &str = "Lanka";
-const DATABASE: &str = "mysql://root:password@127.0.0.1:3306/lanka";
-const UPLOAD_SIZE_LIMIT: usize = 100 * 1048576;
-const HOST: ([u8; 4], u16) = ([127, 0, 0, 1], 8888);
+static TITLE: &str = "Lanka";
+static DATABASE: &str = "mysql://root:password@127.0.0.1:3306/lanka";
+static UPLOAD_SIZE_LIMIT: usize = 100 * 1048576; // N * 1 MB
+static HOST: ([u8; 4], u16) = ([127, 0, 0, 1], 8888);
 
 
 #[tokio::main]
@@ -53,14 +58,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 		.route("/{board}/{thread}", get(render_thread).post(create_post))
 		.layer(DefaultBodyLimit::max(UPLOAD_SIZE_LIMIT))
 		.with_state(shared_state);
+	
 	let config = RustlsConfig::from_pem_file(
 		"cert.pem", "key.pem"
 	).await?;
 	let addr = SocketAddr::from(HOST);
-	println!("Starting server on https://{}", addr);
+	
 	axum_server::bind_rustls(addr, config)
 		.serve(app.into_make_service())
 		.await?;
+	
 	Ok(())
 }
 
@@ -73,6 +80,9 @@ enum DatabaseQuery {
 	ListThreadPosts,
 	CreatePost,
 	BumpThread,
+	GetUserById,
+	GetUserByName,
+	CreateUser,
 }
 impl DatabaseQuery {
 	fn as_str(&self) -> &str {
@@ -82,41 +92,65 @@ impl DatabaseQuery {
 			Self::GetPost => "select * from posts where id = ?",
 			Self::ListThreads => "select * from posts where board = ? and ifnull(thread, 0) = 0 order by bumped desc",
 			Self::ListThreadPosts => "select * from posts where id = ? or thread = ?",
-			Self::CreatePost => "insert into posts(board, thread, reply, content, attachments, author) values(?, ?, ?, ?, ?, ?)",
+			Self::CreatePost => "insert into posts (board, thread, reply, content, attachments, author) values (?, ?, ?, ?, ?, ?)",
 			Self::BumpThread => "update posts SET bumped = current_timestamp() where id = ?",
+			Self::GetUserById => "select * from users where id = ?",
+			Self::GetUserByName => "select * from users where name = ?",
+			Self::CreateUser => "insert into users (name, password, email) values (?, ?, ?)",
 		}
+	}
+}
+impl SqlSafeStr for DatabaseQuery {
+	fn into_sql_str(self) -> SqlStr {
+		AssertSqlSafe(self.as_str()).into_sql_str()
 	}
 }
 
 
-/*
-#[derive(FromRow, Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(FromRow, Deserialize, Clone, Default)]
 struct User {
-	id: u64,
+	id: Option<u64>,
 	name: String,
-	admin: bool,
-	password: Option<String>,
+	password: String,
 	email: Option<String>,
+	admin: bool,
 }
 struct UserManager {
 	pool: MySqlPool,
 }
 impl UserManager {
-	async fn get(-self: Self, id: u64) -> Option<User> {
-		sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = ?;")
+	async fn get_by_id(&self, id: u64) -> Option<User> {
+		let query = DatabaseQuery::GetUserById;
+		sqlx::query_as::<_, User>(query)
 			.bind(id)
-			.fetch_optional(&self.pool)
+			.fetch_one(&self.pool)
 			.await
+			.ok()
 	}
-	async fn create(self: Self, name: String, password: String, email: String) {
-		sqlx::query("INSERT INTO users(name, password, email) values(?, ?, ?);")
+	async fn get_by_name(&self, name: String) -> Option<User> {
+		let query = DatabaseQuery::GetUserByName;
+		sqlx::query_as::<_, User>(query)
+			.bind(name)
+			.fetch_one(&self.pool)
+			.await
+			.ok()
+	}
+	async fn create(
+		&self,
+		name: String,
+		password: String,
+		email: Option<String>
+	) -> Result<(), sqlx::Error> {
+		let query = DatabaseQuery::CreateUser;
+		let _ = sqlx::query(query)
 			.bind(name)
 			.bind(password)
 			.bind(email)
-			.execute(self.pool);
+			.execute(&self.pool)
+			.await?;
+		Ok(())
 	}
 }
-*/
 
 
 #[derive(FromRow, Deserialize)]
@@ -132,14 +166,14 @@ struct BoardManager {
 }
 impl BoardManager {
 	async fn list(&self) -> Vec<Board> {
-		let query = DatabaseQuery::ListBoards.as_str();
+		let query = DatabaseQuery::ListBoards;
 		sqlx::query_as::<_, Board>(query)
 			.fetch_all(&self.pool)
 			.await
 			.unwrap_or(vec![])
 	}
 	async fn exists(&self, name: String) -> bool {
-		let query = DatabaseQuery::BoardExists.as_str();
+		let query = DatabaseQuery::BoardExists;
 		sqlx::query_scalar(query)
 			.bind(name)
 			.fetch_one(&self.pool)
@@ -182,10 +216,9 @@ struct PostData {
 #[derive(Template, Deref)]
 #[template(path = "post.html")]
 struct PostTemplate {
+	#[deref]
 	post: PostData,
-	#[deref(ignore)]
 	op: bool,
-	#[deref(ignore)]
 	reply_op: bool,
 }
 
@@ -199,7 +232,7 @@ struct PostManager {
 }
 impl PostManager {
 	async fn get(&self, id: u64) -> Option<PostData> {
-		let query = DatabaseQuery::GetPost.as_str();
+		let query = DatabaseQuery::GetPost;
 		sqlx::query_as::<_, PostData>(query)
 			.bind(id)
 			.fetch_one(&self.pool)
@@ -215,7 +248,7 @@ impl PostManager {
 		attachments: Option<String>,
 		author: Option<String>,
 	) -> Result<(), sqlx::Error> {
-		let query = DatabaseQuery::CreatePost.as_str();
+		let query = DatabaseQuery::CreatePost;
 		sqlx::query(query)
 			.bind(board)
 			.bind(&thread)
@@ -226,7 +259,7 @@ impl PostManager {
 			.execute(&self.pool)
 			.await?;
 		if thread.is_some() {
-			let query = DatabaseQuery::BumpThread.as_str();
+			let query = DatabaseQuery::BumpThread;
 			sqlx::query(query)
 				.bind(thread)
 				.execute(&self.pool)
@@ -235,13 +268,13 @@ impl PostManager {
 		Ok(())
 	}
 	async fn board(&self, board: &String) -> Vec<Post<ThreadTemplate>> {
-		let query = DatabaseQuery::ListThreads.as_str();
-		let raw = sqlx::query_as::<_, PostData>(query)
+		let query = DatabaseQuery::ListThreads;
+		let data = sqlx::query_as::<_, PostData>(query)
 			.bind(&board)
 			.fetch_all(&self.pool)
 			.await
 			.unwrap_or(vec![]);
-		raw.into_iter()
+		data.into_iter()
 			.map(|post| Post {
 				data: post.clone(), 
 				template: ThreadTemplate(post)
@@ -249,28 +282,27 @@ impl PostManager {
 			.collect()
 	}
 	async fn thread(&self, thread: &u64) -> Vec<Post<PostTemplate>> {
-		let query = DatabaseQuery::ListThreadPosts.as_str();
-		let raw = sqlx::query_as::<_, PostData>(query)
+		let query = DatabaseQuery::ListThreadPosts;
+		let data = sqlx::query_as::<_, PostData>(query)
 			.bind(&thread)
 			.bind(thread)
 			.fetch_all(&self.pool)
 			.await
 			.unwrap_or(vec![]);
 		let mut op_posts: Vec<u64> = vec![];
-		if let Some(first) = raw.get(0) {
-			let op_name = first.author.clone();
-			op_posts = raw
+		if let Some(ref init) = data.get(0) {
+			op_posts = data
 				.iter()
 				.filter_map(
 					|post| {
-					if post.author.is_some() && op_name.is_some() && post.author == op_name {
+					if post.author.is_some() && post.author == init.author {
 						return Some(post.id);
 					}
 					None
 				})
 				.collect();
 		}
-		raw.into_iter()
+		data.into_iter()
 			.map(|post| {
 				let mut op = false;
 				let mut reply_op = false;

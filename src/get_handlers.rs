@@ -1,5 +1,10 @@
 use super::{
-	Path, IntoResponse, StatusCode, State, BoardTemplate, HtmlTemplate
+	Path, 
+	IntoResponse, 
+	StatusCode, 
+	State, 
+	BoardTemplate, 
+	HtmlTemplate
 };
 
 pub async fn render_board(
