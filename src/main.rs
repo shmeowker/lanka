@@ -96,9 +96,9 @@ enum DatabaseQuery {
 	ListUserSessions,
 	DeleteSessionByToken,
 }
-impl<'s> DatabaseQuery {
+impl DatabaseQuery {
 	#[inline]
-	fn into_str(self) -> &'s str {
+	fn into_str(self) -> &'static str {
 		match self {
 			Self::ListBoards => "select * from boards",
 			Self::BoardExists => "select exists(select 1 from boards where id = ?)",
