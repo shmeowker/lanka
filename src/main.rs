@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(unused)]
 
 use askama::Template;
 use axum::{
@@ -16,18 +17,13 @@ use sqlx::{AssertSqlSafe, FromRow, MySqlPool, SqlSafeStr, SqlStr};
 use std::{error::Error, net::SocketAddr, sync::Arc};
 use tower_http::services::ServeDir;
 
-mod form_handlers;
-mod get_handlers;
-
 mod auth;
+mod handlers;
 mod managers;
 
-use managers::{board::*, post::*, session::*, user::*};
-
 use auth::*;
-
-use form_handlers::*;
-use get_handlers::*;
+use handlers::*;
+use managers::*;
 
 static TITLE: &str = "Lanka";
 static DATABASE: &str = "mysql://root:password@127.0.0.1:3306/lanka";
@@ -147,30 +143,3 @@ where
 	}
 }
 
-#[derive(Template)]
-#[template(path = "board.html")]
-struct ForumTemplate {
-	title: String,
-	boards: Vec<Board>,
-	breadcrumbs: Vec<String>,
-	posts: String,
-}
-impl ForumTemplate {
-	async fn new<P: PostKind + Template>(
-		state: LState,
-		breadcrumbs: Vec<String>,
-		posts: Vec<Post<P>>,
-	) -> Self {
-		let boards = state.board.list().await;
-
-		Self {
-			title: TITLE.to_string(),
-			boards: boards,
-			breadcrumbs: breadcrumbs,
-			posts: posts
-				.iter()
-				.map(|post| post.template.render().unwrap())
-				.collect(),
-		}
-	}
-}

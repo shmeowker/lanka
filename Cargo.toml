@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 askama = "0.16"
-axum = { version = "0.8.9", features = ["multipart", "macros"] }
+axum = { version = "0.8.9", features = ["multipart", "macros", "tokio"] }
 axum-server = { version = "0.8", features = ["tls-rustls-no-provider"] }
 blake3 = "1.8.5"
 chrono = { version = "0.4", features = ["serde"] }
