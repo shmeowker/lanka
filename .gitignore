@@ -2,4 +2,5 @@ attachments/*
 key.pem
 cert.pem
 dumpdbschema.sh
+drafts/*
 push
