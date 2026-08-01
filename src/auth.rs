@@ -1,27 +1,13 @@
+use crate::{AppState, Arc, Deref, FromRef, FromRequestParts, LState, StatusCode, User, Utc};
 use axum::{
 	RequestPartsExt,
-  extract::Extension,
-  http::{
-		HeaderMap,
-		header::AUTHORIZATION, 
-		request::Parts,
-	},
-};
-use crate::{
-	Arc,
-	AppState,
-	Deref,
-	FromRequestParts,
-	FromRef,
-	LState,
-	StatusCode,
-	User,
-	Utc,
+	extract::Extension,
+	http::{HeaderMap, header::AUTHORIZATION, request::Parts},
 };
 
 #[derive(Deref)]
 pub struct CurrentUser {
-  user: Option<User>,
+	user: Option<User>,
 }
 
 impl CurrentUser {
@@ -31,28 +17,31 @@ impl CurrentUser {
 }
 
 impl<S> FromRequestParts<S> for CurrentUser
-where 
+where
 	S: Send + Sync,
 	Arc<AppState>: FromRef<S>,
 {
-  type Rejection = (StatusCode, &'static str);
+	type Rejection = (StatusCode, &'static str);
 
 	async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
 		let headers = HeaderMap::from_request_parts(parts, state).await;
 		let Some(token) = headers
 			.as_ref()
-    	.ok()
-    	.and_then(|h| h.get(AUTHORIZATION))
-    	.and_then(|v| v.to_str().ok())
+			.ok()
+			.and_then(|h| h.get(AUTHORIZATION))
+			.and_then(|v| v.to_str().ok())
 			.and_then(|s| s.strip_prefix("Bearer "))
 		else {
-    	return Ok(Self { user: None });
+			return Ok(Self { user: None });
 		};
-		
-		let Extension(state) = parts.extract::<Extension<LState>>()
-			.await
-			.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "State extraction failed."))?;
-	
+
+		let Extension(state) = parts.extract::<Extension<LState>>().await.map_err(|_| {
+			(
+				StatusCode::INTERNAL_SERVER_ERROR,
+				"State extraction failed.",
+			)
+		})?;
+
 		let Some(session) = state.session.get_by_token(&token).await else {
 			return Ok(Self { user: None });
 		};

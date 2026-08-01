@@ -1,35 +1,25 @@
-use axum::extract::{multipart::Field};
+use axum::extract::multipart::Field;
+use futures_util::stream::StreamExt;
 use std::path::Path as StdPath;
-use futures_util::stream::{StreamExt};
-use tokio::fs::{remove_file, rename, File};
+use tokio::fs::{File, remove_file, rename};
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
-use crate::{
-	LState,
-	StatusCode,
-	Redirect,
-	Path,
-	IntoResponse,
-	Response,
-	Multipart,
-};
+use crate::{IntoResponse, LState, Multipart, Path, Redirect, Response, StatusCode};
 
 type ParsedPostFields = (Option<u64>, Option<String>, Option<String>, Option<String>);
 
-
-async fn handle_file_upload(
-	mut field: Field<'_>
-) -> Option<String> {
-	let mut ext = field.file_name()
+async fn handle_file_upload(mut field: Field<'_>) -> Option<String> {
+	let mut ext = field
+		.file_name()
 		.and_then(|name| {
 			if name.is_empty() {
 				return None;
 			}
 			StdPath::new(name).extension()
 		})
-    .and_then(|ext| ext.to_str())
-    .unwrap_or("")
+		.and_then(|ext| ext.to_str())
+		.unwrap_or("")
 		.to_string();
 	if ext != "".to_string() {
 		ext = format!(".{}", ext)
@@ -37,7 +27,7 @@ async fn handle_file_upload(
 	let uuid = Uuid::new_v4();
 	let name = format!("{}.stream", uuid);
 	let temp_path = StdPath::new("attachments/").join(&name);
-	
+
 	let abort = || {
 		tokio::spawn(remove_file(temp_path.to_owned()));
 		None
@@ -52,36 +42,37 @@ async fn handle_file_upload(
 			Err(_) => return abort(),
 		};
 		if first {
-			if bytes.is_empty() { return abort() }
+			if bytes.is_empty() {
+				return abort();
+			}
 			first = false;
 		}
 		hasher.update(&bytes);
 		let _ = file.write_all(&bytes).await;
 	}
-	if file.flush().await.is_err() { return abort() }
-	
-	let mut output = [0u8; 16]; 
+	if file.flush().await.is_err() {
+		return abort();
+	}
+
+	let mut output = [0u8; 16];
 	hasher.finalize_xof().fill(&mut output);
 	let file_hash = hex::encode(output);
-	
+
 	let name = format!("{}{}", file_hash, ext);
 	let path = temp_path.with_file_name(&name);
 	let _ = rename(temp_path, path).await;
-	
+
 	Some(name)
 }
 
-
-async fn parse_create_form(
-	mut multipart: Multipart
-) -> Result<ParsedPostFields, Response> {
+async fn parse_create_form(mut multipart: Multipart) -> Result<ParsedPostFields, Response> {
 	let mut reply: Option<u64> = None;
 	let mut content: Option<String> = None;
 	let mut attachments: Option<String> = None;
 	let mut author: Option<String> = Some("tester".to_string());
 
 	let mut uploaded: Vec<String> = vec![];
-	
+
 	while let Some(field) = multipart.next_field().await.unwrap() {
 		let name = field.name().unwrap_or_default().to_string();
 		match name.as_str() {
@@ -108,7 +99,7 @@ async fn parse_create_form(
 					uploaded.push(filename);
 				}
 			}
-			&_ => ()
+			&_ => (),
 		}
 	}
 	if !uploaded.is_empty() {
@@ -121,32 +112,31 @@ async fn parse_create_form(
 	Ok((reply, content, attachments, author))
 }
 
-
 pub async fn create_thread(
 	state: LState,
 	Path(location): Path<Vec<String>>,
-	multipart: Multipart
+	multipart: Multipart,
 ) -> Result<Response, Response> {
-	let (
-		reply,
-		content,
-		attachments,
-		author,
-	) = parse_create_form(multipart).await?;
+	let (reply, content, attachments, author) = parse_create_form(multipart).await?;
 	match &location[..] {
 		[board] => {
-			match state.post.create(
-				board.to_string(),
-				None,
-				reply,
-				content,
-				attachments,
-				author,
-			).await {
+			match state
+				.post
+				.create(board.to_string(), None, reply, content, attachments, author)
+				.await
+			{
 				Ok(_) => return Ok(Redirect::to(format!("/{}", board).as_str()).into_response()),
-				Err(_) => return Err((StatusCode::INTERNAL_SERVER_ERROR, "Error during database call.").into_response()),
+				Err(_) => {
+					return Err(
+						(
+							StatusCode::INTERNAL_SERVER_ERROR,
+							"Error during database call.",
+						)
+							.into_response(),
+					);
+				}
 			}
-		},
+		}
 		_ => {
 			return Err((StatusCode::BAD_REQUEST, "Invalid form URL.").into_response());
 		}
@@ -156,40 +146,35 @@ pub async fn create_thread(
 pub async fn create_post(
 	state: LState,
 	Path(location): Path<Vec<String>>,
-	multipart: Multipart
+	multipart: Multipart,
 ) -> Result<Response, Response> {
-	let (
-		reply,
-		content,
-		attachments,
-		author,
-	) = parse_create_form(multipart).await?;
+	let (reply, content, attachments, author) = parse_create_form(multipart).await?;
 	match &location[..] {
-		[board, thread] => {
-			match thread.parse::<u64>() {
-				Ok(thread) => {
-					match state.post.get(thread).await {
-						Some(_) => {
-							match state.post.create(
-								board.to_string(),
-								Some(thread),
-								reply,
-								content,
-								attachments,
-								author,
-							).await {
-								Ok(_) => Ok(Redirect::to(format!("/{}/{}", board, thread).as_str()).into_response()),
-								Err(err) => Err((StatusCode::OK, format!("{}", err)).into_response()),
-							}
-						}
-						None => return Err((StatusCode::BAD_REQUEST, "Invalid thread ID.").into_response()),
+		[board, thread] => match thread.parse::<u64>() {
+			Ok(thread) => match state.post.get(thread).await {
+				Some(_) => {
+					match state
+						.post
+						.create(
+							board.to_string(),
+							Some(thread),
+							reply,
+							content,
+							attachments,
+							author,
+						)
+						.await
+					{
+						Ok(_) => Ok(Redirect::to(format!("/{}/{}", board, thread).as_str()).into_response()),
+						Err(err) => Err((StatusCode::OK, format!("{}", err)).into_response()),
 					}
 				}
-				Err(_) => {
-					return Err((StatusCode::BAD_REQUEST, "Invalid thread.").into_response());
-				}
+				None => return Err((StatusCode::BAD_REQUEST, "Invalid thread ID.").into_response()),
+			},
+			Err(_) => {
+				return Err((StatusCode::BAD_REQUEST, "Invalid thread.").into_response());
 			}
-		}
+		},
 		_ => {
 			return Err((StatusCode::BAD_REQUEST, "Invalid form URL.").into_response());
 		}

@@ -1,9 +1,4 @@
-use crate::{
-	FromRow,
-	Deserialize,
-	MySqlPool,
-	DatabaseQuery,
-};
+use crate::{DatabaseQuery, Deserialize, FromRow, MySqlPool};
 
 #[derive(FromRow, Deserialize)]
 pub struct Board {

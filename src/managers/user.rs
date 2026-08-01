@@ -1,9 +1,4 @@
-use crate::{
-	FromRow,
-	Deserialize,
-	MySqlPool,
-	DatabaseQuery,
-};
+use crate::{DatabaseQuery, Deserialize, FromRow, MySqlPool};
 
 #[derive(FromRow, Deserialize, Clone, Default)]
 pub struct User {
@@ -36,7 +31,7 @@ impl UserManager {
 		&self,
 		name: String,
 		password: String,
-		email: Option<String>
+		email: Option<String>,
 	) -> Result<(), sqlx::Error> {
 		sqlx::query(DatabaseQuery::CreateUser)
 			.bind(name)
