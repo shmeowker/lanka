@@ -1,5 +1,14 @@
-use crate::{DatabaseQuery, DateTime, Deref, Deserialize, FromRow, MySqlPool, Template, Utc};
 use rayon::prelude::*;
+use crate::{
+	DatabaseQuery,
+	DateTime,
+	Deref,
+	Deserialize,
+	FromRow,
+	MySqlPool,
+	Template,
+	Utc
+};
 
 pub trait PostKind {
 	fn get_template(&self) -> PostData;
@@ -88,7 +97,7 @@ impl PostManager {
 	}
 	pub async fn board(&self, board: &String) -> Vec<Post<ThreadTemplate>> {
 		let data = sqlx::query_as::<_, PostData>(DatabaseQuery::ListThreads)
-			.bind(&board)
+			.bind(board)
 			.fetch_all(&self.pool)
 			.await
 			.unwrap_or(vec![]);

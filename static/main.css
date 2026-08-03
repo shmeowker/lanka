@@ -74,6 +74,12 @@ article {
 		border-bottom: 1px solid var(--bg-bright);
 	}
 	& .attachments {
+		padding-left: 2rem;
+		& .attachment:has(img, video) {
+			& summary {
+				display: none;
+			}
+		}
 		& .attachment img,
 		& .attachment video {
 			user-select: none;

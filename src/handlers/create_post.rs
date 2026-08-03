@@ -5,9 +5,22 @@ use tokio::fs::{File, remove_file, rename};
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
-use crate::{IntoResponse, LState, Multipart, Path, Redirect, Response, StatusCode};
+use crate::{
+	IntoResponse,
+	LState,
+	Multipart,
+	Path,
+	Redirect,
+	Response,
+	StatusCode
+};
 
-type ParsedPostFields = (Option<u64>, Option<String>, Option<String>, Option<String>);
+type ParsedPostFields = (
+	Option<u64>,
+	Option<String>,
+	Option<String>,
+	Option<String>
+);
 
 async fn handle_file_upload(mut field: Field<'_>) -> Option<String> {
 	let mut ext = field

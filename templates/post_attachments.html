@@ -1,14 +1,13 @@
-{% if let Some(attachments) = attachments %}
-<div class="attachments">
-{%- for file in attachments.split(",") %}
-	<details class="attachment" data-url="/attachments/{{ file }}">
+{%- if let Some(attachments) = attachments -%}
+<ol class="attachments">
+{%- for file in attachments.split(",") -%}
+	<li class="attachment" data-url="/attachments/{{ file }}">
 		<summary>
-			{{ file }}
 			<a href="/attachments/{{ file }}" download>
-				[&DownArrow;]
+				{{ file }}
 			</a>
 		</summary>
-	</details>
-{% endfor -%}
-</div>
-{% endif %}
+	</li>
+{%- endfor -%}
+</ol>
+{%- endif %}

@@ -1,8 +1,18 @@
-use crate::{AppState, Arc, Deref, FromRef, FromRequestParts, LState, StatusCode, User, Utc};
 use axum::{
 	RequestPartsExt,
 	extract::Extension,
 	http::{HeaderMap, header::AUTHORIZATION, request::Parts},
+};
+use crate::{
+	AppState,
+	Arc,
+	Deref,
+	FromRef,
+	FromRequestParts,
+	LState,
+	StatusCode,
+	User,
+	Utc
 };
 
 #[derive(Deref)]
@@ -23,7 +33,9 @@ where
 {
 	type Rejection = (StatusCode, &'static str);
 
-	async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+	async fn from_request_parts(
+		parts: &mut Parts, state: &S
+	) -> Result<Self, Self::Rejection> {
 		let headers = HeaderMap::from_request_parts(parts, state).await;
 		let Some(token) = headers
 			.as_ref()
@@ -35,18 +47,18 @@ where
 			return Ok(Self { user: None });
 		};
 
-		let Extension(state) = parts.extract::<Extension<LState>>().await.map_err(|_| {
-			(
-				StatusCode::INTERNAL_SERVER_ERROR,
-				"State extraction failed.",
-			)
-		})?;
+		let Extension(state) = parts
+			.extract::<Extension<LState>>()
+			.await
+			.map_err(|_| {
+				(StatusCode::INTERNAL_SERVER_ERROR, "State extraction failed.")
+			})?;
 
 		let Some(session) = state.session.get_by_token(&token).await else {
 			return Ok(Self { user: None });
 		};
 
-		if session.expires.is_some() && Utc::now() > session.expires.unwrap() {
+		if Utc::now() > session.expires {
 			let _ = state.session.delete_by_token(token).await;
 			return Ok(Self { user: None });
 		}

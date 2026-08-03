@@ -1,4 +1,12 @@
-use crate::{DatabaseQuery, DateTime, Deserialize, FromRow, MySqlPool, Utc};
+use rand::distr::{Alphanumeric, SampleString};
+use crate::{
+	DatabaseQuery,
+	DateTime,
+	Deserialize,
+	FromRow,
+	MySqlPool,
+	Utc
+};
 
 #[derive(FromRow, Deserialize, Clone, PartialEq)]
 pub struct Session {
@@ -6,8 +14,8 @@ pub struct Session {
 	pub user: u64,
 	pub token_hash: String,
 	pub created: DateTime<Utc>,
-	pub expires: Option<DateTime<Utc>>,
-	pub last_active: Option<DateTime<Utc>>,
+	pub expires: DateTime<Utc>,
+	pub last_active: DateTime<Utc>,
 }
 
 #[derive(Clone)]
@@ -16,9 +24,31 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
-	#[inline]
 	fn hash_token(token: &str) -> String {
 		blake3::hash(token.as_bytes()).to_string()
+	}
+	fn generate_token() -> String {
+		Alphanumeric.sample_string(&mut rand::rng(), 64)
+	}
+	/// Returns raw generated token
+	pub async fn create(&self, user_id: u64) -> Result<String, sqlx::Error> {
+		let token = Self::generate_token();
+		let token_hash = Self::hash_token(&token.as_ref());
+		sqlx::query(DatabaseQuery::CreateSession)
+			.bind(&user_id)
+			.bind(token_hash)
+			.execute(&self.pool)
+			.await?;
+		Ok(token)
+	}
+	/// Extend a session's expiration by 7 days
+	pub async fn renew(&self, token: &str) -> Result<(), sqlx::Error> {
+		let token_hash = Self::hash_token(token);
+		sqlx::query(DatabaseQuery::RenewSession)
+			.bind(token_hash)
+			.execute(&self.pool)
+			.await?;
+		Ok(())
 	}
 	pub async fn get_by_token(&self, token: &str) -> Option<Session> {
 		let token_hash = Self::hash_token(token);
@@ -28,9 +58,9 @@ impl SessionManager {
 			.await
 			.ok()
 	}
-	pub async fn list_by_user_id(&self, id: u64) -> Vec<Session> {
+	pub async fn list_by_user_id(&self, user_id: u64) -> Vec<Session> {
 		sqlx::query_as::<_, Session>(DatabaseQuery::ListUserSessions)
-			.bind(id)
+			.bind(user_id)
 			.fetch_all(&self.pool)
 			.await
 			.unwrap_or(vec![])

@@ -1,4 +1,9 @@
-use crate::{DatabaseQuery, Deserialize, FromRow, MySqlPool};
+use crate::{
+	DatabaseQuery,
+	Deserialize,
+	FromRow,
+	MySqlPool
+};
 
 #[derive(FromRow, Deserialize, Clone, Default)]
 pub struct User {

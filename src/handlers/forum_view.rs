@@ -1,4 +1,16 @@
-use crate::{TITLE, HtmlTemplate, IntoResponse, LState, Path, StatusCode, Template, Board, Post, PostTemplate, PostKind};
+use crate::{
+	Board,
+	HtmlTemplate,
+	IntoResponse,
+	LState,
+	Path,
+	Post,
+	PostKind,
+	PostTemplate,
+	StatusCode,
+	TITLE,
+	Template,
+};
 
 #[derive(Template)]
 #[template(path = "board.html")]
@@ -27,7 +39,6 @@ impl ForumTemplate {
 		}
 	}
 }
-
 
 pub async fn render_board(
 	Path(board): Path<String>,

@@ -1,6 +1,6 @@
-pub mod user;
+pub mod board;
 pub mod post;
 pub mod session;
-pub mod board;
+pub mod user;
 
 pub use {board::*, post::*, session::*, user::*};

@@ -4,7 +4,14 @@
 use askama::Template;
 use axum::{
 	Router,
-	extract::{DefaultBodyLimit, FromRef, FromRequestParts, Multipart, Path, State},
+	extract::{
+		DefaultBodyLimit,
+		FromRef,
+		FromRequestParts,
+		Multipart,
+		Path,
+		State
+	},
 	http::StatusCode,
 	response::{Html, IntoResponse, Redirect, Response},
 	routing::{get, post},
@@ -13,7 +20,13 @@ use axum_server::tls_rustls::RustlsConfig;
 use chrono::{DateTime, Utc};
 use derive_more::Deref;
 use serde::Deserialize;
-use sqlx::{AssertSqlSafe, FromRow, MySqlPool, SqlSafeStr, SqlStr};
+use sqlx::{
+	AssertSqlSafe,
+	FromRow,
+	MySqlPool,
+	SqlSafeStr,
+	SqlStr
+};
 use std::{error::Error, net::SocketAddr, sync::Arc};
 use tower_http::services::ServeDir;
 
@@ -63,6 +76,8 @@ enum DatabaseQuery {
 	GetUserById,
 	GetUserByName,
 	CreateUser,
+	CreateSession,
+	RenewSession,
 	GetSessionByToken,
 	ListUserSessions,
 	DeleteSessionByToken,
@@ -76,19 +91,17 @@ impl DatabaseQuery {
 			Self::BoardExists => "select exists(select 1 from boards where id = ?)",
 			// PostManager queries
 			Self::GetPost => "select * from posts where id = ?",
-			Self::ListThreads => {
-				"select * from posts where board = ? and ifnull(thread, 0) = 0 order by bumped desc"
-			}
+			Self::ListThreads => "select * from posts where board = ? and ifnull(thread, 0) = 0 order by bumped desc",
 			Self::ListThreadPosts => "select * from posts where id = ? or thread = ?",
-			Self::CreatePost => {
-				"insert into posts (board, thread, reply, content, attachments, author) values (?, ?, ?, ?, ?, ?)"
-			}
-			Self::BumpThread => "update posts SET bumped = current_timestamp() where id = ?",
+			Self::CreatePost => "insert into posts (board, thread, reply, content, attachments, author) values (?, ?, ?, ?, ?, ?)",
+			Self::BumpThread => "update posts set bumped = current_timestamp() where id = ?",
 			// UserManager queries
 			Self::GetUserById => "select * from users where id = ?",
 			Self::GetUserByName => "select * from users where name = ?",
 			Self::CreateUser => "insert into users (name, password, email) values (?, ?, ?)",
 			// SessionManager queries
+			Self::CreateSession => "insert into sessions (user, token_hash) values (?, ?)",
+			Self::RenewSession => "update sessions set expires = date_add(current_timestamp() + interval 7 day) where token_hash = ?",
 			Self::GetSessionByToken => "select * from sessions where token_hash = ?",
 			Self::ListUserSessions => "select * from sessions where user = ?",
 			Self::DeleteSessionByToken => "delete from sessions where token_hash = ?",
@@ -142,4 +155,3 @@ where
 		}
 	}
 }
-

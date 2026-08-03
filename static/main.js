@@ -9,7 +9,7 @@ function detectMediaType(url) {
 
   if (imageExtensions.includes(extension)) return 'image';
   if (videoExtensions.includes(extension)) return 'video';
-  return 'unknown';
+  return 'other';
 }
 
 function renderAttachment(element) {
@@ -27,6 +27,9 @@ function renderAttachment(element) {
 			video.controls = true;
 			element.appendChild(video);
 			element.open = true;
+			break;
+		case "other":
+			null;
 	}
 }
 
