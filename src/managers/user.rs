@@ -18,6 +18,9 @@ pub struct UserManager {
 	pub pool: MySqlPool,
 }
 impl UserManager {
+	pub fn new(pool: &MySqlPool) -> Self {
+		Self { pool: pool.clone() }
+	}
 	pub async fn get_by_id(&self, id: u64) -> Option<User> {
 		sqlx::query_as::<_, User>(DatabaseQuery::GetUserById)
 			.bind(id)

@@ -62,6 +62,9 @@ pub struct PostManager {
 }
 
 impl PostManager {
+	pub fn new(pool: &MySqlPool) -> Self {
+		Self { pool: pool.clone() }
+	}
 	pub async fn get(&self, id: u64) -> Option<PostData> {
 		sqlx::query_as::<_, PostData>(DatabaseQuery::GetPost)
 			.bind(id)

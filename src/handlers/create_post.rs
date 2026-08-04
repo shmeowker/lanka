@@ -22,6 +22,7 @@ type ParsedPostFields = (
 	Option<String>
 );
 
+
 async fn handle_file_upload(mut field: Field<'_>) -> Option<String> {
 	let mut ext = field
 		.file_name()
@@ -34,11 +35,11 @@ async fn handle_file_upload(mut field: Field<'_>) -> Option<String> {
 		.and_then(|ext| ext.to_str())
 		.unwrap_or("")
 		.to_string();
-	if ext != "".to_string() {
-		ext = format!(".{}", ext)
+	if !ext.is_empty() {
+		ext.insert(0, '.');
 	}
 	let uuid = Uuid::new_v4();
-	let name = format!("{}.stream", uuid);
+	let name = format!("{uuid}.stream");
 	let temp_path = StdPath::new("attachments/").join(&name);
 
 	let abort = || {
@@ -71,7 +72,7 @@ async fn handle_file_upload(mut field: Field<'_>) -> Option<String> {
 	hasher.finalize_xof().fill(&mut output);
 	let file_hash = hex::encode(output);
 
-	let name = format!("{}{}", file_hash, ext);
+	let name = format!("{file_hash}{ext}");
 	let path = temp_path.with_file_name(&name);
 	let _ = rename(temp_path, path).await;
 
@@ -138,14 +139,14 @@ pub async fn create_thread(
 				.create(board.to_string(), None, reply, content, attachments, author)
 				.await
 			{
-				Ok(_) => return Ok(Redirect::to(format!("/{}", board).as_str()).into_response()),
+				Ok(_) => {
+					return Ok(
+						Redirect::to(format!("/{}", board).as_str()).into_response()
+					);
+				}
 				Err(_) => {
 					return Err(
-						(
-							StatusCode::INTERNAL_SERVER_ERROR,
-							"Error during database call.",
-						)
-							.into_response(),
+						(StatusCode::INTERNAL_SERVER_ERROR, "Database error.").into_response()
 					);
 				}
 			}

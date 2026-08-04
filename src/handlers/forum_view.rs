@@ -12,6 +12,7 @@ use crate::{
 	Template,
 };
 
+
 #[derive(Template)]
 #[template(path = "board.html")]
 struct ForumTemplate {
@@ -20,6 +21,7 @@ struct ForumTemplate {
 	breadcrumbs: Vec<String>,
 	posts: String,
 }
+
 impl ForumTemplate {
 	async fn new<P: PostKind + Template>(
 		state: LState,
@@ -39,6 +41,7 @@ impl ForumTemplate {
 		}
 	}
 }
+
 
 pub async fn render_board(
 	Path(board): Path<String>,

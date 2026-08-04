@@ -17,6 +17,9 @@ pub struct BoardManager {
 	pub pool: MySqlPool,
 }
 impl BoardManager {
+	pub fn new(pool: &MySqlPool) -> Self {
+		Self { pool: pool.clone() }
+	}
 	pub async fn list(&self) -> Vec<Board> {
 		sqlx::query_as::<_, Board>(DatabaseQuery::ListBoards)
 			.fetch_all(&self.pool)

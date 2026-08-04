@@ -43,6 +43,7 @@ static DATABASE: &str = "mysql://root:password@127.0.0.1:3306/lanka";
 static UPLOAD_SIZE_LIMIT: usize = 100 * 1048576; // N * 1 MB
 static HOST: ([u8; 4], u16) = ([127, 0, 0, 1], 8888);
 
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
 	let shared_state = Arc::new(AppState::new().await);
@@ -64,27 +65,36 @@ async fn main() -> Result<(), Box<dyn Error>> {
 	Ok(())
 }
 
+/// Holds all database queries
 #[derive(Clone, Copy)]
 enum DatabaseQuery {
+	// BoardManager queries
 	ListBoards,
 	BoardExists,
+	// PostManager queries
 	GetPost,
 	ListThreads,
 	ListThreadPosts,
 	CreatePost,
 	BumpThread,
+	// UserManager queries
 	GetUserById,
 	GetUserByName,
 	CreateUser,
+	// SessionManager queries
 	CreateSession,
 	RenewSession,
 	GetSessionByToken,
 	ListUserSessions,
 	DeleteSessionByToken,
+	DeleteSessionById,
 }
+
 impl DatabaseQuery {
 	#[inline]
 	fn into_str(self) -> &'static str {
+		// Attention: The queries below are for MariaDB (InnoDB).
+		// Compatibility with other engines is not guaranteed.
 		match self {
 			// BoardManager queries
 			Self::ListBoards => "select * from boards",
@@ -100,14 +110,16 @@ impl DatabaseQuery {
 			Self::GetUserByName => "select * from users where name = ?",
 			Self::CreateUser => "insert into users (name, password, email) values (?, ?, ?)",
 			// SessionManager queries
-			Self::CreateSession => "insert into sessions (user, token_hash) values (?, ?)",
+			Self::CreateSession => "insert into sessions (user, token_hash) values (?, ?) returning *",
 			Self::RenewSession => "update sessions set expires = date_add(current_timestamp() + interval 7 day) where token_hash = ?",
 			Self::GetSessionByToken => "select * from sessions where token_hash = ?",
 			Self::ListUserSessions => "select * from sessions where user = ?",
 			Self::DeleteSessionByToken => "delete from sessions where token_hash = ?",
+			Self::DeleteSessionById => "delete from sessions where id = ?",
 		}
 	}
 }
+
 impl SqlSafeStr for DatabaseQuery {
 	#[inline]
 	fn into_sql_str(self) -> SqlStr {
@@ -115,14 +127,16 @@ impl SqlSafeStr for DatabaseQuery {
 	}
 }
 
+
 type LState = State<Arc<AppState>>;
-#[derive(FromRef, Clone)]
+
 struct AppState {
 	board: BoardManager,
 	post: PostManager,
 	user: UserManager,
 	session: SessionManager,
 }
+
 impl AppState {
 	async fn new() -> Self {
 		let pool = MySqlPool::connect(DATABASE)
@@ -130,13 +144,14 @@ impl AppState {
 			.expect("Failed to connect to the database.");
 
 		Self {
-			board: BoardManager { pool: pool.clone() },
-			post: PostManager { pool: pool.clone() },
-			user: UserManager { pool: pool.clone() },
-			session: SessionManager { pool: pool },
+			board: BoardManager::new(&pool),
+			post: PostManager::new(&pool),
+			user: UserManager::new(&pool),
+			session: SessionManager::new(pool),
 		}
 	}
 }
+
 
 struct HtmlTemplate<T>(T);
 
