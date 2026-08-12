@@ -1,4 +1,4 @@
-attachments/*
+static/*
 key.pem
 cert.pem
 dumpdbschema.sh
