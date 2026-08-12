@@ -1,8 +1,14 @@
 use axum::{
 	RequestPartsExt,
 	extract::Extension,
-	http::{HeaderMap, header::AUTHORIZATION, request::Parts},
+	http::{
+		HeaderMap,
+		header::{AUTHORIZATION, COOKIE},
+		request::Parts
+	},
 };
+use axum_extra::extract::cookie::{CookieJar, Cookie};
+
 use crate::{
 	AppState,
 	Arc,
@@ -15,14 +21,13 @@ use crate::{
 	Utc
 };
 
+
 #[derive(Deref)]
-pub struct CurrentUser {
-	user: Option<User>,
-}
+pub struct CurrentUser(Option<User>);
 
 impl CurrentUser {
-	pub fn is_some(&self) -> bool {
-		self.user.is_some()
+	pub fn unwrap(&self) -> User {
+		self.0.clone().unwrap()
 	}
 }
 
@@ -36,35 +41,28 @@ where
 	async fn from_request_parts(
 		parts: &mut Parts, state: &S
 	) -> Result<Self, Self::Rejection> {
-		let headers = HeaderMap::from_request_parts(parts, state).await;
-		let Some(token) = headers
-			.as_ref()
-			.ok()
-			.and_then(|h| h.get(AUTHORIZATION))
-			.and_then(|v| v.to_str().ok())
-			.and_then(|s| s.strip_prefix("Bearer "))
+		let cookies = CookieJar::from_headers(&parts.headers);
+		let Some(token) = cookies
+			.get("Authorization")
+			.and_then(move |c| Some(c.value()))
 		else {
-			return Ok(Self { user: None });
+			return Ok(Self(None));
 		};
-
-		let Extension(state) = parts
-			.extract::<Extension<LState>>()
+		let state = Arc::<AppState>::from_ref(state);
+		let Some(session) = state.session
+			.get_by_token(&token)
 			.await
-			.map_err(|_| {
-				(StatusCode::INTERNAL_SERVER_ERROR, "State extraction failed.")
-			})?;
-
-		let Some(session) = state.session.get_by_token(&token).await else {
-			return Ok(Self { user: None });
+		else {
+			return Ok(Self(None));
 		};
 
 		if Utc::now() > session.expires {
-			let _ = state.session.delete_by_token(token).await;
-			return Ok(Self { user: None });
+			let _ = state.session.delete_by_token(&token).await;
+			return Ok(Self(None));
 		}
 
 		let user = state.user.get_by_id(session.user).await;
 
-		Ok(Self { user: user })
+		Ok(Self(user))
 	}
 }

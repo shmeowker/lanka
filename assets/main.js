@@ -12,30 +12,41 @@ function detectMediaType(url) {
   return 'other';
 }
 
-function renderAttachment(element) {
-	const type = detectMediaType(element.dataset.url);
+function renderAttachment(parent, data) {
+	const template = document.getElementById("attachment-template");
+	const li = template.content
+		.cloneNode(true)
+		.querySelector("li");
+	const type = detectMediaType(data["name"]);
+	const url = `/static/${data["name"]}`;
 	switch (type) {
 		case "image":
 			const img = document.createElement("img");
-			img.src = element.dataset.url;
-			element.appendChild(img);
-			element.open = true;
+			img.src = url;
+			li.replaceChildren(img);
 			break;
 		case "video":
 			const video = document.createElement("video");
-			video.src = element.dataset.url;
+			video.src = url;
 			video.controls = true;
-			element.appendChild(video);
-			element.open = true;
+			li.replaceChildren(video);
 			break;
 		case "other":
-			null;
+			li.querySelector("a").href = url;
 	}
+	parent.appendChild(li);
+}
+
+function renderAttachments(element) {
+	const attachments = JSON.parse(element.dataset.json);
+	attachments.forEach((a) => {
+		renderAttachment(element, a);
+	});
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-	const elements = document.querySelectorAll(".attachment");
+	const elements = document.querySelectorAll(".attachments");
 	elements.forEach((elem) => {
-		renderAttachment(elem);
+		renderAttachments(elem);
 	});
 });

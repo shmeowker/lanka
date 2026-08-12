@@ -1,5 +1,7 @@
 use rayon::prelude::*;
+use serde_json::Value;
 use crate::{
+	AttachmentManager,
 	DatabaseQuery,
 	DateTime,
 	Deref,
@@ -9,6 +11,7 @@ use crate::{
 	Template,
 	Utc
 };
+
 
 pub trait PostKind {
 	fn get_template(&self) -> PostData;
@@ -33,12 +36,12 @@ pub struct PostData {
 	pub id: u64,
 	pub board: String,
 	pub thread: Option<u64>,
+	pub reply: Option<u64>,
 	pub content: Option<String>,
 	pub attachments: Option<String>,
-	pub reply: Option<u64>,
-	pub bumped: DateTime<Utc>,
-	pub created: DateTime<Utc>,
 	pub author: Option<String>,
+	pub created: DateTime<Utc>,
+	pub bumped: DateTime<Utc>,
 	pub pinned: Option<bool>,
 	pub locked: Option<bool>,
 }
@@ -59,11 +62,15 @@ pub struct ThreadTemplate(PostData);
 #[derive(Clone)]
 pub struct PostManager {
 	pub pool: MySqlPool,
+	pub attachment: AttachmentManager,
 }
 
 impl PostManager {
 	pub fn new(pool: &MySqlPool) -> Self {
-		Self { pool: pool.clone() }
+		Self {
+			pool: pool.clone(),
+			attachment: AttachmentManager::new(&pool),
+		}
 	}
 	pub async fn get(&self, id: u64) -> Option<PostData> {
 		sqlx::query_as::<_, PostData>(DatabaseQuery::GetPost)
@@ -78,18 +85,20 @@ impl PostManager {
 		thread: Option<u64>,
 		reply: Option<u64>,
 		content: Option<String>,
-		attachments: Option<String>,
+		mut attachments: Vec<Value>,
 		author: Option<String>,
 	) -> Result<(), sqlx::Error> {
-		sqlx::query(DatabaseQuery::CreatePost)
+		let post_id: u64 = sqlx::query_scalar(DatabaseQuery::CreatePost)
 			.bind(board)
 			.bind(&thread)
 			.bind(reply)
 			.bind(content)
-			.bind(attachments)
 			.bind(author)
-			.execute(&self.pool)
+			.fetch_one(&self.pool)
 			.await?;
+		for data in attachments.drain(..) {
+			self.attachment.create(&post_id, data).await;
+		}
 		if thread.is_some() {
 			sqlx::query(DatabaseQuery::BumpThread)
 				.bind(thread)

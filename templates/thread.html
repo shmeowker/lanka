@@ -1,9 +1,8 @@
-
 <article id="{{ id }}">
-{% include "post_caption.html" %}
-{% include "post_content.html" %}
+{% include "post/caption.html" %}
+{% include "post/content.html" %}
   <footer>
-{% include "reply_button.html" %}
+{% include "post/reply_button.html" %}
 		<a href="/{{ board }}/{{ id }}">
 			<button>
 				View thread

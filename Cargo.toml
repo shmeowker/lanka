@@ -1,15 +1,17 @@
 [package]
 name = "lanka"
-version = "0.0.18"
+version = "0.0.25"
 edition = "2024"
 
 [dependencies]
 askama = "0.16"
 axum = { version = "0.8.9", features = ["multipart", "macros", "tokio"] }
+axum-extra = { version = "0.12.6", features = ["cookie", "typed-header"] }
 axum-server = { version = "0.8", features = ["tls-rustls-no-provider"] }
 blake3 = "1.8.5"
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = { version = "2.1.1", features = ["full"] }
+futures = "0.3.34"
 futures-util = "0.3.33"
 hex = "0.4.3"
 moka = { version = "0.12.15", features = ["future"] }
@@ -17,11 +19,11 @@ rand = "0.10.2"
 rayon = "1.12.0"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.151"
 sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls", "mysql", "chrono"] }
 tokio = { version = "1.53.1", features = ["full"] }
 tower-http = { version = "0.5", features = ["fs"] }
 uuid = { version = "1.24.0", features = ["v4"] }
-#serde_json = "1.0.150"
 #infer = "0.22.0"
 #image = "0.25.10"
 #ffmpeg-next = "8.1.0"

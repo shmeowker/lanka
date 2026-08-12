@@ -3,6 +3,7 @@ use futures_util::stream::StreamExt;
 use std::path::Path as StdPath;
 use tokio::fs::{File, remove_file, rename};
 use tokio::io::AsyncWriteExt;
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::{
@@ -18,38 +19,39 @@ use crate::{
 type ParsedPostFields = (
 	Option<u64>,
 	Option<String>,
+	Vec<Value>,
 	Option<String>,
-	Option<String>
 );
 
 
-async fn handle_file_upload(mut field: Field<'_>) -> Option<String> {
-	let mut ext = field
+async fn handle_file_upload(mut field: Field<'_>) -> Option<Value> {
+	let original_name = field
 		.file_name()
-		.and_then(|name| {
-			if name.is_empty() {
-				return None;
-			}
-			StdPath::new(name).extension()
-		})
-		.and_then(|ext| ext.to_str())
+		.filter(move |n| !n.is_empty())
+		.map(str::to_owned)?;
+	let mut ext = StdPath::new(&original_name)
+		.extension()
+		.and_then(move |ext| ext.to_str())
 		.unwrap_or("")
 		.to_string();
+	
 	if !ext.is_empty() {
 		ext.insert(0, '.');
 	}
 	let uuid = Uuid::new_v4();
 	let name = format!("{uuid}.stream");
-	let temp_path = StdPath::new("attachments/").join(&name);
+	let temp_path = StdPath::new("static/").join(&name);
 
 	let abort = || {
 		tokio::spawn(remove_file(temp_path.to_owned()));
 		None
 	};
-
+	
 	let mut hasher = blake3::Hasher::new();
 	let mut file = File::create(&temp_path).await.unwrap();
 	let mut first = true;
+	let mut size: usize = 0;
+	
 	while let Some(chunk) = field.next().await {
 		let bytes = match chunk {
 			Ok(data) => data,
@@ -62,7 +64,8 @@ async fn handle_file_upload(mut field: Field<'_>) -> Option<String> {
 			first = false;
 		}
 		hasher.update(&bytes);
-		let _ = file.write_all(&bytes).await;
+		file.write_all(&bytes).await;
+		size += bytes.len();
 	}
 	if file.flush().await.is_err() {
 		return abort();
@@ -76,16 +79,18 @@ async fn handle_file_upload(mut field: Field<'_>) -> Option<String> {
 	let path = temp_path.with_file_name(&name);
 	let _ = rename(temp_path, path).await;
 
-	Some(name)
+	Some(json!({
+		"name": name,
+		"size": size,
+		"original_name": original_name
+	}))
 }
 
 async fn parse_create_form(mut multipart: Multipart) -> Result<ParsedPostFields, Response> {
 	let mut reply: Option<u64> = None;
 	let mut content: Option<String> = None;
-	let mut attachments: Option<String> = None;
+	let mut attachments: Vec<Value> = vec![];
 	let mut author: Option<String> = Some("tester".to_string());
-
-	let mut uploaded: Vec<String> = vec![];
 
 	while let Some(field) = multipart.next_field().await.unwrap() {
 		let name = field.name().unwrap_or_default().to_string();
@@ -97,7 +102,7 @@ async fn parse_create_form(mut multipart: Multipart) -> Result<ParsedPostFields,
 			}
 			"content" => {
 				content = match field.text().await.ok() {
-					Some(empty) if empty == "".to_string() => None,
+					Some(empty) if empty.is_empty() => None,
 					Some(nonempty) => Some(nonempty),
 					None => None,
 				};
@@ -109,17 +114,14 @@ async fn parse_create_form(mut multipart: Multipart) -> Result<ParsedPostFields,
 				}
 			}
 			"attachments" => {
-				if let Some(filename) = handle_file_upload(field).await {
-					uploaded.push(filename);
+				if let Some(file) = handle_file_upload(field).await {
+					attachments.push(file);
 				}
 			}
 			&_ => (),
 		}
 	}
-	if !uploaded.is_empty() {
-		attachments = Some(uploaded.join(","));
-	}
-	if attachments.is_none() && content.is_none() {
+	if attachments.is_empty() && content.is_none() {
 		return Err((StatusCode::BAD_REQUEST, "No valid content provided.").into_response());
 	}
 

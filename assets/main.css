@@ -2,7 +2,7 @@
 
 @font-face {
 	font-family: "JetBrains Mono";
-	src: url("/static/JetBrainsMono.ttf");
+	src: url("/assets/JetBrainsMono.ttf");
 }
 
 :root {
@@ -75,13 +75,8 @@ article {
 	}
 	& .attachments {
 		padding-left: 2rem;
-		& .attachment:has(img, video) {
-			& summary {
-				display: none;
-			}
-		}
-		& .attachment img,
-		& .attachment video {
+		& img,
+		& video {
 			user-select: none;
 			width: 100%;
 			border-radius: 3px;

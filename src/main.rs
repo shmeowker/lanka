@@ -27,7 +27,11 @@ use sqlx::{
 	SqlSafeStr,
 	SqlStr
 };
-use std::{error::Error, net::SocketAddr, sync::Arc};
+use std::{
+	error::Error,
+	net::SocketAddr,
+	sync::Arc,
+};
 use tower_http::services::ServeDir;
 
 mod auth;
@@ -48,8 +52,10 @@ static HOST: ([u8; 4], u16) = ([127, 0, 0, 1], 8888);
 async fn main() -> Result<(), Box<dyn Error>> {
 	let shared_state = Arc::new(AppState::new().await);
 	let app = Router::<Arc<AppState>>::new()
+		.nest_service("/assets", ServeDir::new("assets"))
 		.nest_service("/static", ServeDir::new("static"))
-		.nest_service("/attachments", ServeDir::new("attachments"))
+		.route("/login", post(login))
+		.route("/", get(index))
 		.route("/{board}", get(render_board).post(create_thread))
 		.route("/{board}/{thread}", get(render_thread).post(create_post))
 		.with_state(shared_state)
@@ -68,19 +74,47 @@ async fn main() -> Result<(), Box<dyn Error>> {
 /// Holds all database queries
 #[derive(Clone, Copy)]
 enum DatabaseQuery {
+	// AttachmentManager queries
+	//ListAttachmentsByName,
+	//DeleteAttachmentsByName,
+	//DeleteAttachmentById,
+	ListAttachmentsForPost,
+	CreateAttachment,
+	//ListOrphanedAttachments,
+	//DeleteOrphanedAttachments,
+	
 	// BoardManager queries
 	ListBoards,
 	BoardExists,
+	ListThemes,
+	ListBoardsByTheme,
+	//CreateBoard,
+	//EditBoard,
+	//DeleteBoard,
+	//CreateTheme,
+	//DeleteTheme,
+	
 	// PostManager queries
 	GetPost,
 	ListThreads,
 	ListThreadPosts,
 	CreatePost,
 	BumpThread,
+	//SetThreadPin,
+	//SetThreadLock,
+	//DeletePost,
+	//DeleteThread,
+	//MoveThread,
+	
 	// UserManager queries
 	GetUserById,
 	GetUserByName,
+	GetUserByLogin,
 	CreateUser,
+	//ChangeUserEmail,
+	//ChangeUserName,
+	//ChangeUserPassword,
+	
 	// SessionManager queries
 	CreateSession,
 	RenewSession,
@@ -92,23 +126,32 @@ enum DatabaseQuery {
 
 impl DatabaseQuery {
 	#[inline]
-	fn into_str(self) -> &'static str {
+	const fn into_str(self) -> &'static str {
 		// Attention: The queries below are for MariaDB (InnoDB).
 		// Compatibility with other engines is not guaranteed.
 		match self {
+			// AttachmentManager queries
+			Self::ListAttachmentsForPost => "select * from attachments where post = ?",
+			Self::CreateAttachment => "insert into attachments (post, name, size, original_name) values (?, ?, ?, ?)",
 			// BoardManager queries
 			Self::ListBoards => "select * from boards",
 			Self::BoardExists => "select exists(select 1 from boards where id = ?)",
+			Self::ListThemes => "select * from themes",
+			Self::ListBoardsByTheme => "select * from boards where theme = ?",
+			
 			// PostManager queries
-			Self::GetPost => "select * from posts where id = ?",
-			Self::ListThreads => "select * from posts where board = ? and ifnull(thread, 0) = 0 order by bumped desc",
-			Self::ListThreadPosts => "select * from posts where id = ? or thread = ?",
-			Self::CreatePost => "insert into posts (board, thread, reply, content, attachments, author) values (?, ?, ?, ?, ?, ?)",
+			Self::GetPost => "select posts.*, (select json_arrayagg(json_object('name', a.name, 'size', a.size, 'original_name', a.original_name)) from attachments a where a.post = posts.id) attachments from posts where id = ?",
+			Self::ListThreads => "select posts.*, (select json_arrayagg(json_object('name', a.name, 'size', a.size, 'original_name', a.original_name)) from attachments a where a.post = posts.id) attachments from posts where board = ? and ifnull(thread, 0) = 0 order by bumped desc",
+			Self::ListThreadPosts => "select posts.*, (select json_arrayagg(json_object('name', a.name, 'size', a.size, 'original_name', a.original_name)) from attachments a where a.post = posts.id) attachments from posts where id = ? or thread = ?;",
+			Self::CreatePost => "insert into posts (board, thread, reply, content, author) values (?, ?, ?, ?, ?) returning id",
 			Self::BumpThread => "update posts set bumped = current_timestamp() where id = ?",
+			
 			// UserManager queries
 			Self::GetUserById => "select * from users where id = ?",
 			Self::GetUserByName => "select * from users where name = ?",
+			Self::GetUserByLogin => "select * from users where name = ? or email = ?",
 			Self::CreateUser => "insert into users (name, password, email) values (?, ?, ?)",
+			
 			// SessionManager queries
 			Self::CreateSession => "insert into sessions (user, token_hash) values (?, ?) returning *",
 			Self::RenewSession => "update sessions set expires = date_add(current_timestamp() + interval 7 day) where token_hash = ?",
@@ -165,8 +208,7 @@ where
 			Err(err) => (
 				StatusCode::INTERNAL_SERVER_ERROR,
 				format!("Failed to render template: {err}"),
-			)
-				.into_response(),
+			).into_response(),
 		}
 	}
 }

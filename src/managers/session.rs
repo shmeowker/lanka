@@ -1,3 +1,4 @@
+use axum::http::HeaderValue;
 use moka::future::Cache;
 use rand::distr::{Alphanumeric, SampleString};
 use std::time::Duration;
@@ -45,7 +46,7 @@ impl SessionManager {
 	fn generate_token() -> String {
 		Alphanumeric.sample_string(&mut rand::rng(), 64)
 	}
-	/// Returns a `String` containing a new unhashed token on success.
+	/// Returns a `String` containing a fresh token on success.
 	pub async fn create(&self, user_id: u64) -> Result<String, sqlx::Error> {
 		let token = Self::generate_token();
 		let token_hash = Self::hash_token(&token.as_ref());
