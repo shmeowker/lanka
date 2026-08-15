@@ -1,4 +1,4 @@
-use rayon::prelude::*;
+use std::collections::HashSet;
 use crate::{
 	AttachmentManager,
 	DatabaseQuery,
@@ -72,15 +72,17 @@ impl PostManager {
 			attachment: AttachmentManager::new(&pool),
 		}
 	}
-	pub async fn get(&self, id: u64) -> Option<PostData> {
+	pub async fn get(&self, post_id: &u64) -> Option<PostData> {
 		sqlx::query_as::<_, PostData>(DatabaseQuery::GetPost)
-			.bind(id)
+			.bind(post_id)
 			.fetch_one(&self.pool)
 			.await
 			.ok()
 	}
-	/// Create a post. If `thread` is None, creates a thread.
-	/// If `author` is None, post is anonymous.
+	/// Create a post.
+	///
+	/// If `thread` is None, the post is considered a thread.
+	/// If `author` is None, the post is anonymous.
 	pub async fn create(
 		&self,
 		board: String,
@@ -116,7 +118,7 @@ impl PostManager {
 			.await
 			.unwrap_or(vec![]);
 		data
-			.into_par_iter()
+			.into_iter()
 			.map(|post| Post {
 				data: post.clone(),
 				template: ThreadTemplate(post),
@@ -124,42 +126,34 @@ impl PostManager {
 			.collect()
 	}
 	pub async fn thread(&self, thread: &u64) -> Vec<Post<PostTemplate>> {
-		let data = sqlx::query_as::<_, PostData>(DatabaseQuery::ListThreadPosts)
-			.bind(&thread)
+    let data = sqlx::query_as::<_, PostData>(DatabaseQuery::ListThreadPosts)
+      .bind(thread)
 			.bind(thread)
 			.fetch_all(&self.pool)
 			.await
-			.unwrap_or(vec![]);
-		let mut op_posts: Vec<u64> = vec![];
-		if let Some(ref init) = data.get(0) {
-			op_posts = data
-				.par_iter()
-				.filter_map(|post| {
-					if post.author.is_some() && post.author == init.author {
-						return Some(post.id);
-					}
-					None
-				})
-				.collect();
-		}
-		data
-			.into_par_iter()
+			.unwrap_or_default();
+
+    let mut op_posts = HashSet::new();
+
+    if let Some(init) = data.first() {
+      op_posts.extend(
+        data.iter()
+          .filter(|post| post.author.is_some() && post.author == init.author)
+          .map(|post| post.id),
+      );
+    }
+
+    data.into_iter()
 			.map(|post| {
-				let mut op = false;
-				let mut reply_op = false;
-				if op_posts.contains(&post.id) {
-					op = true;
-				}
-				if let Some(reply) = &post.reply.as_ref() {
-					reply_op = op_posts.contains(&reply);
-				}
+				let op = op_posts.contains(&post.id);
+				let reply_op = post
+					.reply
+					.as_ref()
+					.is_some_and(|reply| op_posts.contains(reply));
+
 				Post {
 					data: post.clone(),
-					template: PostTemplate {
-						post: post,
-						op: op,
-						reply_op: reply_op,
-					},
+					template: PostTemplate { post, op, reply_op },
 				}
 			})
 			.collect()

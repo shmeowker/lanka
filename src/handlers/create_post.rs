@@ -181,7 +181,7 @@ pub async fn create_post(
 				return Err((StatusCode::BAD_REQUEST, "Invalid board."))
 			}
 			match thread.parse::<u64>() {
-				Ok(thread) => match state.post.get(thread).await {
+				Ok(thread) => match state.post.get(&thread).await {
 					Some(_) => {
 						match state
 							.post
