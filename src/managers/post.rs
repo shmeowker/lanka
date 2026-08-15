@@ -1,11 +1,11 @@
 use rayon::prelude::*;
-use serde_json::Value;
 use crate::{
 	AttachmentManager,
 	DatabaseQuery,
 	DateTime,
 	Deref,
 	Deserialize,
+	FileSummary,
 	FromRow,
 	MySqlPool,
 	Template,
@@ -79,13 +79,15 @@ impl PostManager {
 			.await
 			.ok()
 	}
+	/// Create a post. If `thread` is None, creates a thread.
+	/// If `author` is None, post is anonymous.
 	pub async fn create(
 		&self,
 		board: String,
 		thread: Option<u64>,
 		reply: Option<u64>,
 		content: Option<String>,
-		mut attachments: Vec<Value>,
+		mut attachments: Vec<FileSummary>,
 		author: Option<String>,
 	) -> Result<(), sqlx::Error> {
 		let post_id: u64 = sqlx::query_scalar(DatabaseQuery::CreatePost)

@@ -11,6 +11,7 @@ use crate::{
 	StatusCode,
 	TITLE,
 	Template,
+	User,
 };
 
 
@@ -19,24 +20,27 @@ use crate::{
 struct ForumTemplate {
 	title: String,
 	boards: Vec<Board>,
-	breadcrumbs: Vec<String>,
+	board: Board,
+	thread: Option<u64>,
 	posts: String,
-	user: CurrentUser,
+	user: Option<User>,
 }
 
 impl ForumTemplate {
 	async fn new<P: PostKind + Template>(
 		state: LState,
-		breadcrumbs: Vec<String>,
+		board: Board,
+		thread: Option<u64>,
 		posts: Vec<Post<P>>,
-		user: CurrentUser,
+		user: Option<User>,
 	) -> Self {
 		let boards = state.board.list().await;
 
 		Self {
 			title: TITLE.to_string(),
 			boards: boards,
-			breadcrumbs: breadcrumbs,
+			board: board,
+			thread: thread,
 			posts: posts
 				.iter()
 				.map(|post| post.template.render().unwrap())
@@ -50,13 +54,17 @@ impl ForumTemplate {
 pub async fn render_board(
 	Path(board): Path<String>,
 	state: LState,
-	user: CurrentUser,
+	CurrentUser(user): CurrentUser,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
 	let posts = state.post.board(&board).await;
+	let Some(board) = state.board.get(&board).await else {
+		return Err((StatusCode::NOT_FOUND, format!("Board '{board}' does not exists.")));
+	};
 
 	let template = ForumTemplate::new(
 		state,
-		vec![format!("{board}")],
+		board,
+		None,
 		posts,
 		user
 	).await;
@@ -67,13 +75,17 @@ pub async fn render_board(
 pub async fn render_thread(
 	Path((board, thread)): Path<(String, u64)>,
 	state: LState,
-	user: CurrentUser,
+	CurrentUser(user): CurrentUser,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
 	let posts = state.post.thread(&thread).await;
+	let Some(board) = state.board.get(&board).await else {
+		return Err((StatusCode::NOT_FOUND, format!("Board '{board}' does not exists.")));
+	};
 
 	let template = ForumTemplate::new(
 		state,
-		vec![format!("{board}"), format!("{thread}")],
+		board,
+		Some(thread),
 		posts,
 		user
 	).await;

@@ -4,6 +4,10 @@
     <title>{{ title }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="/assets/main.css">
+		<link rel="stylesheet" href="/assets/hljs.css">
+		<script src="https://cdn.jsdelivr.net/npm/linkify-it/build/index.cjs.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/markdown-it/dist/browser/markdown-it.umd.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/highlight.min.js"></script>
     <script src="https://127.0.0.1:8443/assets/eruda.js" defer></script>
   	<script src="/assets/main.js" defer></script>
 	</head>
@@ -24,45 +28,23 @@
 					onclick="document.getElementById('reply').value=''">
 					Post
 				</button>
-{%- if user.is_some() -%}
-{%- let user = user.unwrap() -%}
-<button popovertarget="user">@{{ user.name }}</button>
-{%- else -%}
-<button popovertarget="login">Login</button>
-{%- endif -%}
+{%- include "user_button.html" -%}
 			</span>
-			<form id="login" popover method="post" action="/login">
-				<legend>Login</legend>
-				<fieldset>
-					<legend>Name or email</legend>
-					<input type="text" required
-						name="login"
-						placeholder="Username or email">
-				</fieldset>
-				<fieldset>
-					<legend>Password</legend>
-					<input type="password" required 
-						name="password"
-						placeholder="Password">
-				</fieldset>
-				<hr>
-				<fieldset>
-					<small><a href="#">Forgot password?</a></small>
-					<button>Register</button>
-					<button type="submit">Login</button>
-				</fieldset>
-			</form>
+{%- include "login_form.html" -%}
     </header>
     <main>
-      <h1 class="path">
-        <nav class="breadcrumbs">
-          <ol>{% set path = "" %}{% for crumb in breadcrumbs %}{% set path = format!("{path}/{crumb}") %}
-            <li>
-							{% if loop.last %}{{ crumb }}{% else %}<a href="{{path}}">{{crumb}}</a>{% endif %}
-            </li>{% endfor %}
-          </ol>
-        </nav>
-      </h1>
+      <div class="caption">
+        <h1>
+					<a href="/{{ board.name }}">{{ board.title }}</a>
+				</h1>
+{%- if let Some(description) = board.description -%}
+			<p>{{ description }} </p>
+{%- endif -%}
+{%- if let Some(thread) = thread -%}
+			<hr>
+			<p>Thread §{{ thread }}</p>
+{%- endif -%}
+      </div>
 			<a href="#bottom" class="bottom">
 				<span>&darr;</span>
 			</a>

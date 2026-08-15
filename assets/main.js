@@ -1,3 +1,6 @@
+
+
+
 function detectMediaType(url) {
   const imageExtensions = 
     ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', "tiff", "avif"];
@@ -49,4 +52,13 @@ document.addEventListener("DOMContentLoaded", () => {
 	elements.forEach((elem) => {
 		renderAttachments(elem);
 	});
+	const contents = document.querySelectorAll(".content div");
+	const md = new window.markdownit({
+		breaks: true,
+		linkify: true,
+	});
+	contents.forEach((elem) => {
+		elem.innerHTML = md.render(elem.textContent);
+	})
+	hljs.highlightAll();
 });

@@ -19,12 +19,7 @@
 	      </select>
 			</span>
 			<span>
-{%- if user.is_some() -%}
-{%- let current_user = user.unwrap() -%}
-<button popovertarget="user">@{{ current_user.name }}</button>
-{%- else -%}
-<button popovertarget="login">Login</button>
-{%- endif -%}
+{%- include "user_button.html" -%}
 			</span>
 			<form id="login" popover method="post" action="/login">
 				<legend>Login</legend>
@@ -49,14 +44,40 @@
 			</form>
     </header>
     <main>
-      <h1>{{ title }}</h1>
-			<code>
-{%- if user.is_some() -%}
-{%- set current_user = user.unwrap() -%}
-{%- let u = format!("{:?}", current_user) -%}
-{{ u }}
-{%- endif -%}
-			</code>
+      <div class="caption">
+				<h1>{{ title }}</h1>
+				<p>
+					Lorem, ipsum dolor sit amet consectetur 
+					adipisicing elit. Veniam animi ipsa harum 
+					in amet dolores obcaecati aliquam, quos 
+					iusto quae perspiciatis maxime. Officia, 
+					assumenda expedita id nesciunt laudantium 
+					quas illum.
+				</p>
+				<hr>
+				<p>
+					Currently serving 76 posts in 11 threads on 1 boards. 76 total posts ever created.
+				</p>
+			</div>
+			<form action="/search">
+				<fieldset>
+					<input type="search" required placeholder="Search posts...">
+					<button type="submit">Find</button>
+				</fieldset>
+			</form>
+			<h1 class="caption">
+				Boards
+			</h1>
+			<div class="themes">
+				<div class="theme">
+					<summary>Testing</summary>
+					<ol>
+						<li>
+							<a href="/test">Testboard</a> (9)
+						</li>
+					</ol>
+				</div>
+			</div>
     </main>
   </body>
 </html>

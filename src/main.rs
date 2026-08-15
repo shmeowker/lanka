@@ -84,6 +84,7 @@ enum DatabaseQuery {
 	//DeleteOrphanedAttachments,
 	
 	// BoardManager queries
+	GetBoardByName,
 	ListBoards,
 	BoardExists,
 	ListThemes,
@@ -134,6 +135,7 @@ impl DatabaseQuery {
 			Self::ListAttachmentsForPost => "select * from attachments where post = ?",
 			Self::CreateAttachment => "insert into attachments (post, name, size, original_name) values (?, ?, ?, ?)",
 			// BoardManager queries
+			Self::GetBoardByName => "select * from boards where name = ?",
 			Self::ListBoards => "select * from boards",
 			Self::BoardExists => "select exists(select 1 from boards where id = ?)",
 			Self::ListThemes => "select * from themes",

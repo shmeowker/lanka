@@ -1,3 +1,6 @@
 {%- if let Some(attachments) = attachments -%}
-<ol class="attachments" data-json="{{ attachments }}"></ol>
+<details open>
+	<summary>Attachments</summary>
+	<ol class="attachments" data-json="{{ attachments }}"></ol>
+</details>
 {%- endif %}

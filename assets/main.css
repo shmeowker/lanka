@@ -12,6 +12,7 @@
 	overflow-wrap: break-word;
 	--text: #fff;
   --default: #eee;
+	--dim: #aaa;
   --accent: hotpink;
   --bg: #333;
   --bg-light: #393939;
@@ -32,8 +33,13 @@ a {
   text-decoration: none;
 }
 
+p {
+	padding: 0 .5rem;
+}
+
 h1, h2, h3, h4, h5, h6 {
   margin: 0;
+	text-align: center;
 }
 
 hr {
@@ -65,6 +71,21 @@ article {
 		}
 	}
 	& .content {
+		h1, h2, h3, h4, h5, h6 {
+			text-align: left;
+		}
+		& p {
+			padding: 0;
+			margin: 0;
+		}
+		& pre {
+			margin: 0;
+		}
+		& blockquote {
+			margin: 0;
+			padding: .25rem;
+			border-left: 2px solid var(--dim);
+		}
 		font-size: .75rem;
 		font-weight: 400;
 		color: var(--text);
@@ -101,13 +122,9 @@ article {
   padding: .5rem;
 }
 
-h1 {
-	display: flex;
-	width: 100%;
+.caption {
+	text-align: center;
 	padding: 2rem 0;
-	& * {
-		margin: auto;
-	}
 }
 
 .breadcrumbs {
@@ -149,6 +166,7 @@ form {
 		justify-content: space-between;
 		align-items: center;
 		& input[type="text"],
+		& input[type="search"],
 		& input[type="password"] {
 			width: 100%;
 		}
@@ -173,6 +191,23 @@ form {
 		& span {
 			display: flex;
 			align-items: center;
+		}
+	}
+}
+
+.themes {
+	& .theme {
+		padding: .5rem;
+		& summary {
+			font-weight: 700;
+		}
+		& ul {
+			list-style: none;
+			padding-left: 0;
+			& li::before {
+				content: '•';
+				color: var(--dim);
+			}
 		}
 	}
 }

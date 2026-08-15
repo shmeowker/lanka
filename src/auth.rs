@@ -15,7 +15,6 @@ use crate::{
 	Deref,
 	FromRef,
 	FromRequestParts,
-	LState,
 	StatusCode,
 	User,
 	Utc
@@ -23,13 +22,8 @@ use crate::{
 
 
 #[derive(Deref)]
-pub struct CurrentUser(Option<User>);
+pub struct CurrentUser(pub Option<User>);
 
-impl CurrentUser {
-	pub fn unwrap(&self) -> User {
-		self.0.clone().unwrap()
-	}
-}
 
 impl<S> FromRequestParts<S> for CurrentUser
 where

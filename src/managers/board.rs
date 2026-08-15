@@ -1,4 +1,5 @@
 use futures::future::join_all;
+
 use crate::{
 	DatabaseQuery,
 	Deserialize,
@@ -17,7 +18,7 @@ pub struct ThemeBoards {
 	pub boards: Vec<Board>,
 }
 
-#[derive(FromRow, Deserialize)]
+#[derive(FromRow, Deserialize, Clone)]
 pub struct Board {
 	pub name: String,
 	pub theme: String,
@@ -28,12 +29,21 @@ pub struct Board {
 
 #[derive(Clone)]
 pub struct BoardManager {
-	pub pool: MySqlPool,
+	pool: MySqlPool,
 }
 
 impl BoardManager {
 	pub fn new(pool: &MySqlPool) -> Self {
-		Self { pool: pool.clone() }
+		Self { 
+			pool: pool.clone(),
+		}
+	}
+	pub async fn get(&self, name: &String) -> Option<Board> {
+		sqlx::query_as::<_, Board>(DatabaseQuery::GetBoardByName)
+			.bind(name)
+			.fetch_one(&self.pool)
+			.await
+			.ok()
 	}
 	pub async fn list(&self) -> Vec<Board> {
 		sqlx::query_as::<_, Board>(DatabaseQuery::ListBoards)
@@ -41,7 +51,7 @@ impl BoardManager {
 			.await
 			.unwrap_or(vec![])
 	}
-	pub async fn exists(&self, name: String) -> bool {
+	pub async fn exists(&self, name: &String) -> bool {
 		sqlx::query_scalar(DatabaseQuery::BoardExists)
 			.bind(name)
 			.fetch_one(&self.pool)

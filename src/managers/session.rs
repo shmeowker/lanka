@@ -25,7 +25,7 @@ pub struct Session {
 
 #[derive(Clone)]
 pub struct SessionManager {
-	pub pool: MySqlPool,
+	pool: MySqlPool,
 	cache: Cache<String, Session>,
 }
 

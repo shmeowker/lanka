@@ -1,12 +1,12 @@
-{%- if breadcrumbs is not defined -%}
+{%- if board is not defined -%}
 <option value="" disabled selected>—</option>
 {%- endif -%}
-{%- for board in boards -%}
+{%- for b in boards -%}
 <option 
-	value="{{ board.name }}"
-	{% if breadcrumbs is defined && board.name.as_str() == breadcrumbs[0] -%}
+	value="{{ b.name }}"
+	{% if board is defined && board.name == b.name -%}
 	selected
 	{%- endif -%}>
-	/{{ board.name }}
+	/{{ b.name }}
 </option>
 {%- endfor -%}
