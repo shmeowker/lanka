@@ -50,6 +50,8 @@ static HOST: ([u8; 4], u16) = ([127, 0, 0, 1], 8888);
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+	ezlz::init("en_US", "locales")?;
+	
 	let shared_state = Arc::new(AppState::new().await);
 	let app = Router::<Arc<AppState>>::new()
 		.nest_service("/assets", ServeDir::new("assets"))
@@ -87,8 +89,8 @@ enum DatabaseQuery {
 	GetBoardByName,
 	ListBoards,
 	BoardExists,
-	ListThemes,
-	ListBoardsByTheme,
+	ListTopics,
+	ListBoardsByTopic,
 	//CreateBoard,
 	//EditBoard,
 	//DeleteBoard,
@@ -96,11 +98,16 @@ enum DatabaseQuery {
 	//DeleteTheme,
 	
 	// PostManager queries
+	PostExists,
+	ThreadExists,
 	GetPost,
 	ListThreads,
 	ListThreadPosts,
 	CreatePost,
 	BumpThread,
+	CountExistingPosts,
+	CountExistingThreads,
+	CountTotalPosts,
 	//SetThreadPin,
 	//SetThreadLock,
 	//DeletePost,
@@ -137,16 +144,21 @@ impl DatabaseQuery {
 			// BoardManager queries
 			Self::GetBoardByName => "select * from boards where name = ?",
 			Self::ListBoards => "select * from boards",
-			Self::BoardExists => "select exists(select 1 from boards where id = ?)",
-			Self::ListThemes => "select * from themes",
-			Self::ListBoardsByTheme => "select * from boards where theme = ?",
+			Self::BoardExists => "select exists(select 1 from boards where name = ?)",
+			Self::ListTopics => "select * from themes",
+			Self::ListBoardsByTopic => "select * from boards where theme = ?",
 			
 			// PostManager queries
+			Self::PostExists => "select exists(select 1 from posts where thread is null and id = ?)",
+			Self::ThreadExists => "select exists(select 1 from posts where id = ?)",
 			Self::GetPost => "select posts.*, (select json_arrayagg(json_object('name', a.name, 'size', a.size, 'original_name', a.original_name)) from attachments a where a.post = posts.id) attachments from posts where id = ?",
-			Self::ListThreads => "select posts.*, (select json_arrayagg(json_object('name', a.name, 'size', a.size, 'original_name', a.original_name)) from attachments a where a.post = posts.id) attachments from posts where board = ? and ifnull(thread, 0) = 0 order by bumped desc",
+			Self::ListThreads => "select posts.*, (select json_arrayagg(json_object('name', a.name, 'size', a.size, 'original_name', a.original_name)) from attachments a where a.post = posts.id) attachments from posts where board = ? and thread is null order by bumped desc",
 			Self::ListThreadPosts => "select posts.*, (select json_arrayagg(json_object('name', a.name, 'size', a.size, 'original_name', a.original_name)) from attachments a where a.post = posts.id) attachments from posts where id = ? or thread = ?;",
 			Self::CreatePost => "insert into posts (board, thread, reply, content, author) values (?, ?, ?, ?, ?) returning id",
 			Self::BumpThread => "update posts set bumped = current_timestamp() where id = ?",
+			Self::CountExistingPosts => "select TABLE_ROWS from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA = 'lanka' and TABLE_NAME = 'posts'", // Replace 'lanka' to your database name
+			Self::CountExistingThreads => "select count(*) from posts where thread is null",
+			Self::CountTotalPosts => "select id from posts order by id desc limit 1",
 			
 			// UserManager queries
 			Self::GetUserById => "select * from users where id = ?",
@@ -173,6 +185,7 @@ impl SqlSafeStr for DatabaseQuery {
 }
 
 type Rejection = (StatusCode, &'static str);
+type ORejection = (StatusCode, String);
 type LState = State<Arc<AppState>>;
 
 struct AppState {

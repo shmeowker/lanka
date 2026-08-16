@@ -4,6 +4,7 @@ use crate::{
 	HtmlTemplate,
 	IntoResponse,
 	LState,
+	ORejection,
 	Path,
 	Post,
 	PostKind,
@@ -18,7 +19,6 @@ use crate::{
 #[derive(Template)]
 #[template(path = "forum.html")]
 struct ForumTemplate {
-	title: String,
 	boards: Vec<Board>,
 	board: Board,
 	thread: Option<u64>,
@@ -37,7 +37,6 @@ impl ForumTemplate {
 		let boards = state.board.list().await;
 
 		Self {
-			title: TITLE.to_string(),
 			boards: boards,
 			board: board,
 			thread: thread,
@@ -55,7 +54,7 @@ pub async fn render_board(
 	Path(board): Path<String>,
 	state: LState,
 	CurrentUser(user): CurrentUser,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ORejection> {
 	let posts = state.post.board(&board).await;
 	let Some(board) = state.board.get(&board).await else {
 		return Err((StatusCode::NOT_FOUND, format!("Board '{board}' does not exists.")));
@@ -76,7 +75,7 @@ pub async fn render_thread(
 	Path((board, thread)): Path<(String, u64)>,
 	state: LState,
 	CurrentUser(user): CurrentUser,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ORejection> {
 	let posts = state.post.thread(&thread).await;
 	let Some(board) = state.board.get(&board).await else {
 		return Err((StatusCode::NOT_FOUND, format!("Board '{board}' does not exists.")));

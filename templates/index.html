@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>{{ title }}</title>
+		<title>{{ TITLE }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="/assets/main.css">
     <script src="https://127.0.0.1:8443/assets/eruda.js" defer></script>
@@ -10,7 +10,7 @@
   <body>
     <header class="navbar">
       <a href="/">
-     		<strong id="title">{{ title }}</strong>
+     		<strong id="title">{{ TITLE }}</strong>
 			</a>
 			<span>
 				<label for="boards">Board:</label>
@@ -21,42 +21,23 @@
 			<span>
 {%- include "user_button.html" -%}
 			</span>
-			<form id="login" popover method="post" action="/login">
-				<legend>Login</legend>
-				<fieldset>
-					<legend>Name or email</legend>
-					<input type="text" required
-						name="login"
-						placeholder="Username or email">
-				</fieldset>
-				<fieldset>
-					<legend>Password</legend>
-					<input type="password" required 
-						name="password"
-						placeholder="Password">
-				</fieldset>
-				<hr>
-				<fieldset>
-					<small><a href="#">Forgot password?</a></small>
-					<button>Register</button>
-					<button type="submit">Login</button>
-				</fieldset>
-			</form>
+{%- include "login_form.html" -%}
     </header>
     <main>
       <div class="caption">
-				<h1>{{ title }}</h1>
+				<h1>{{ TITLE }}</h1>
 				<p>
-					Lorem, ipsum dolor sit amet consectetur 
-					adipisicing elit. Veniam animi ipsa harum 
-					in amet dolores obcaecati aliquam, quos 
-					iusto quae perspiciatis maxime. Officia, 
-					assumenda expedita id nesciunt laudantium 
-					quas illum.
+					Optionally anonymous bulletin-board forum that focuses
+					on performance and simplicity by using Rust backend and
+					minimal vanilla JS/CSS frontend.
 				</p>
 				<hr>
 				<p>
-					Currently serving 76 posts in 11 threads on 1 boards. 76 total posts ever created.
+					Currently serving 
+					{{ stats[0] }} posts 
+					in {{ stats[1] }} threads 
+					on {{ stats[2] }} boards. 
+					{{ stats[3] }} total posts.
 				</p>
 			</div>
 			<form action="/search">

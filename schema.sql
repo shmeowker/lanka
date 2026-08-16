@@ -14,13 +14,13 @@ CREATE TABLE IF NOT EXISTS `attachments` (
 );
 CREATE TABLE IF NOT EXISTS `boards` (
   `name` varchar(16) NOT NULL,
-  `theme` varchar(128) NOT NULL,
+  `topic` varchar(128) NOT NULL,
   `title` varchar(128) NOT NULL,
   `description` text DEFAULT NULL,
   `locked` bit(1) DEFAULT NULL,
   PRIMARY KEY (`name`),
-  KEY `theme` (`theme`),
-  CONSTRAINT `fk_boards_theme` FOREIGN KEY (`theme`) REFERENCES `themes` (`name`) ON DELETE CASCADE ON UPDATE CASCADE
+  KEY `theme` (`topic`),
+  CONSTRAINT `1` FOREIGN KEY (`topic`) REFERENCES `topics` (`name`) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `posts` (
   `id` int(16) unsigned NOT NULL,
@@ -38,9 +38,11 @@ CREATE TABLE IF NOT EXISTS `posts` (
   KEY `board` (`board`),
   KEY `reply` (`reply`),
   KEY `thread` (`thread`),
+  KEY `bumped` (`bumped`),
+  FULLTEXT KEY `content` (`content`),
   CONSTRAINT `2` FOREIGN KEY (`board`) REFERENCES `boards` (`name`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `3` FOREIGN KEY (`author`) REFERENCES `users` (`name`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `4` FOREIGN KEY (`reply`) REFERENCES `posts` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `4` FOREIGN KEY (`reply`) REFERENCES `posts` (`id`) ON DELETE NO ACTION ON UPDATE CASCADE,
   CONSTRAINT `fk_posts_thread` FOREIGN KEY (`thread`) REFERENCES `posts` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `sessions` (
@@ -55,7 +57,7 @@ CREATE TABLE IF NOT EXISTS `sessions` (
   KEY `user` (`user`),
   CONSTRAINT `1` FOREIGN KEY (`user`) REFERENCES `users` (`id`) ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS `themes` (
+CREATE TABLE IF NOT EXISTS `topics` (
   `name` varchar(128) NOT NULL,
   PRIMARY KEY (`name`)
 );
@@ -63,7 +65,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `id` int(16) unsigned NOT NULL,
   `name` varchar(32) NOT NULL,
   `admin` bit(1) NOT NULL DEFAULT b'0',
-  `password` char(64) NOT NULL,
+  `password_hash` char(64) NOT NULL,
   `email` varchar(64) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),

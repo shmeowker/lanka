@@ -59,7 +59,7 @@ pub struct ThreadTemplate(PostData);
 
 #[derive(Clone)]
 pub struct PostManager {
-	pub pool: MySqlPool,
+	pool: MySqlPool,
 	pub attachment: AttachmentManager,
 }
 
@@ -69,6 +69,12 @@ impl PostManager {
 			pool: pool.clone(),
 			attachment: AttachmentManager::new(&pool),
 		}
+	}
+	pub async fn post_exists(&self, post_id: &u64) -> bool {
+		todo!()
+	}
+	pub async fn thread_exists(&self, thread_id: &u64) -> bool {
+		todo!()
 	}
 	pub async fn get(&self, post_id: &u64) -> Option<PostData> {
 		sqlx::query_as::<_, PostData>(DatabaseQuery::GetPost)
@@ -155,4 +161,23 @@ impl PostManager {
 			})
 			.collect()
 	}
+	pub async fn count_all(&self) -> u64 {
+		sqlx::query_scalar(DatabaseQuery::CountExistingPosts)
+			.fetch_one(&self.pool)
+			.await
+			.unwrap_or(0)
+	}
+	pub async fn count_threads(&self) -> u64 {
+		sqlx::query_scalar(DatabaseQuery::CountExistingThreads)
+			.fetch_one(&self.pool)
+			.await
+			.unwrap_or(0) as u64
+	}
+	pub async fn count_total(&self) -> u64 {
+		sqlx::query_scalar(DatabaseQuery::CountTotalPosts)
+			.fetch_one(&self.pool)
+			.await
+			.unwrap_or(0)
+	}
+	
 }

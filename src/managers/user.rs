@@ -10,7 +10,7 @@ use crate::{
 pub struct User {
 	pub id: u64,
 	pub name: String,
-	password: String,
+	password_hash: String,
 	pub email: Option<String>,
 	pub admin: bool,
 }
@@ -18,13 +18,13 @@ pub struct User {
 impl User {
 	pub fn match_password(&self, password: &String) -> bool {
 		let password_hash = blake3::hash(password.as_bytes()).to_string();
-		self.password == password_hash
+		self.password_hash == password_hash
 	}
 }
 
 #[derive(Clone)]
 pub struct UserManager {
-	pub pool: MySqlPool,
+	pool: MySqlPool,
 }
 
 impl UserManager {
