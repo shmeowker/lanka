@@ -43,7 +43,7 @@ impl ForumTemplate {
 			thread: thread,
 			posts: posts
 				.iter()
-				.map(|post| post.template.render().unwrap())
+				.map(|post| post.render().unwrap())
 				.collect(),
 			user: user,
 		}

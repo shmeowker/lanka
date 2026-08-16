@@ -14,6 +14,7 @@ use crate::{
 	Path,
 	Redirect,
 	Response,
+	Rejection,
 	StatusCode
 };
 
@@ -23,8 +24,6 @@ type ParsedFormFields = (
 	Vec<FileSummary>,
 	bool,
 );
-
-type Rejection = (StatusCode, &'static str);
 
 
 async fn handle_upload(mut field: Field<'_>) -> Option<FileSummary> {

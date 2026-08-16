@@ -172,7 +172,7 @@ impl SqlSafeStr for DatabaseQuery {
 	}
 }
 
-
+type Rejection = (StatusCode, &'static str);
 type LState = State<Arc<AppState>>;
 
 struct AppState {

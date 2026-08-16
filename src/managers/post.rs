@@ -14,22 +14,20 @@ use crate::{
 
 
 pub trait PostKind {
-	fn get_template(&self) -> PostData;
+	fn get_template(&self) -> &PostData;
 }
 
 impl<T> PostKind for T
 where
 	T: std::ops::Deref<Target = PostData>,
 {
-	fn get_template(&self) -> PostData {
-		(*self).clone()
+	fn get_template(&self) -> &PostData {
+		self
 	}
 }
 
-pub struct Post<P: PostKind> {
-	pub data: PostData,
-	pub template: P,
-}
+#[derive(Deref)]
+pub struct Post<P: PostKind>(P);
 
 #[derive(FromRow, Deserialize, Clone, PartialEq)]
 pub struct PostData {
@@ -119,10 +117,7 @@ impl PostManager {
 			.unwrap_or(vec![]);
 		data
 			.into_iter()
-			.map(|post| Post {
-				data: post.clone(),
-				template: ThreadTemplate(post),
-			})
+			.map(|post| Post(ThreadTemplate(post)))
 			.collect()
 	}
 	pub async fn thread(&self, thread: &u64) -> Vec<Post<PostTemplate>> {
@@ -151,10 +146,12 @@ impl PostManager {
 					.as_ref()
 					.is_some_and(|reply| op_posts.contains(reply));
 
-				Post {
-					data: post.clone(),
-					template: PostTemplate { post, op, reply_op },
-				}
+				Post (
+					PostTemplate { 
+						post: post, 
+						op: op, 
+						reply_op: reply_op },
+				)
 			})
 			.collect()
 	}
