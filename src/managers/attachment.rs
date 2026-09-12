@@ -3,7 +3,7 @@ use crate::{
 	MySqlPool,
 };
 
-/// (True name, size, original name)
+/// (Stored name, size, original name)
 ///
 /// Information about uploaded file to insert into the database.
 pub type FileSummary = (String, usize, String);
@@ -25,9 +25,22 @@ impl AttachmentManager {
 			pool: pool.clone(),
 		}
 	}
+
+    #[allow(unused)]
 	pub async fn list_for_post(&self, post_id: u64) -> Vec<Attachment> {
 		todo!();
 	}
+
+    #[allow(unused)]
+    pub async fn delete_for_post(&self, post_id: u64, name: String) -> Result<(), sqlx::Error> {
+        todo!();
+    }
+    
+    #[allow(unused)]
+    pub async fn delete(&self, name: String) -> Result<(), sqlx::Error> {
+        todo!();
+    }
+    
 	pub async fn create(&self, post_id: &u64, data: FileSummary) -> Result<(), sqlx::Error> {
 		let (name, size, original_name) = data;
 		sqlx::query(DatabaseQuery::CreateAttachment)
@@ -39,6 +52,7 @@ impl AttachmentManager {
 			.await?;
 		Ok(())
 	}
+    
 	pub async fn delete_orphans(&self) -> Result<u64, sqlx::Error> {
 		todo!();
 	}

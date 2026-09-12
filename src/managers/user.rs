@@ -2,14 +2,16 @@ use crate::{
 	DatabaseQuery,
 	Deserialize,
 	FromRow,
-	MySqlPool
+	MySqlPool,
+    Serialize,
 };
 
 
-#[derive(FromRow, Deserialize, Clone, Debug)]
+#[derive(FromRow, Deserialize, Serialize, Clone, Debug)]
 pub struct User {
 	pub id: u64,
 	pub name: String,
+    #[serde(skip_serializing)]
 	password_hash: String,
 	pub email: Option<String>,
 	pub admin: bool,
@@ -47,7 +49,7 @@ impl UserManager {
 	}
 	pub async fn get_by_login(&self, login: &String) -> Option<User> {
 		sqlx::query_as::<_, User>(DatabaseQuery::GetUserByLogin)
-			.bind(&login)
+			.bind(login)
 			.bind(login)
 			.fetch_one(&self.pool)
 			.await

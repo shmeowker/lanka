@@ -1,5 +1,5 @@
+#![allow(clippy::redundant_field_names)]
 #![allow(dead_code)]
-#![allow(unused)]
 
 use askama::Template;
 use axum::{
@@ -19,7 +19,7 @@ use axum::{
 use axum_server::tls_rustls::RustlsConfig;
 use chrono::{DateTime, Utc};
 use derive_more::Deref;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{
 	AssertSqlSafe,
 	FromRow,
@@ -33,6 +33,7 @@ use std::{
 	sync::Arc,
 };
 use tower_http::services::ServeDir;
+use mimalloc::MiMalloc;
 
 mod auth;
 mod handlers;
@@ -42,6 +43,9 @@ use auth::*;
 use handlers::*;
 use managers::*;
 
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 static TITLE: &str = "Lanka";
 static DATABASE: &str = "mysql://root:password@127.0.0.1:3306/lanka";
 static UPLOAD_SIZE_LIMIT: usize = 100 * 1048576; // N * 1 MB
@@ -50,8 +54,6 @@ static HOST: ([u8; 4], u16) = ([127, 0, 0, 1], 8888);
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-	ezlz::init("en_US", "locales")?;
-	
 	let shared_state = Arc::new(AppState::new().await);
 	let app = Router::<Arc<AppState>>::new()
 		.nest_service("/assets", ServeDir::new("assets"))

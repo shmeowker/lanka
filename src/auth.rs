@@ -1,13 +1,9 @@
 use axum::{
-	RequestPartsExt,
-	extract::Extension,
 	http::{
-		HeaderMap,
-		header::{AUTHORIZATION, COOKIE},
 		request::Parts
 	},
 };
-use axum_extra::extract::cookie::{CookieJar, Cookie};
+use axum_extra::extract::cookie::{CookieJar};
 
 use crate::{
 	AppState,
@@ -38,20 +34,20 @@ where
 		let cookies = CookieJar::from_headers(&parts.headers);
 		let Some(token) = cookies
 			.get("Authorization")
-			.and_then(move |c| Some(c.value()))
+			.map(|c| c.value())
 		else {
 			return Ok(Self(None));
 		};
 		let state = Arc::<AppState>::from_ref(state);
 		let Some(session) = state.session
-			.get_by_token(&token)
+			.get_by_token(token)
 			.await
 		else {
 			return Ok(Self(None));
 		};
 
 		if Utc::now() > session.expires {
-			let _ = state.session.delete_by_token(&token).await;
+			let _ = state.session.delete_by_token(token).await;
 			return Ok(Self(None));
 		}
 

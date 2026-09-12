@@ -4,13 +4,11 @@ use crate::{
 	HtmlTemplate,
 	LState,
 	IntoResponse,
-	Response,
 	Template,
 	TITLE,
 	User,
 };
 
-use ezlz::t;
 
 #[derive(Template)]
 #[template(path = "index.html")]

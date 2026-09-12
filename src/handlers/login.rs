@@ -1,9 +1,5 @@
 use axum::{
 	extract::Form,
-	http::{
-		header,
-		HeaderValue,
-	},
 };
 use axum_extra::extract::cookie::{CookieJar, Cookie, SameSite};
 use time::{OffsetDateTime, Duration};

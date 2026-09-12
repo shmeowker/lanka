@@ -4,21 +4,23 @@ use crate::{
 	DatabaseQuery,
 	Deserialize,
 	FromRow,
-	MySqlPool
+	MySqlPool,
+    Serialize,
 };
 
 
-#[derive(FromRow, Deserialize)]
+#[derive(FromRow, Deserialize, Serialize)]
 pub struct Topic {
 	pub name: String,
 }
 
+#[derive(Serialize)]
 pub struct TopicBoards {
 	pub topic: Topic,
 	pub boards: Vec<Board>,
 }
 
-#[derive(FromRow, Deserialize, Clone)]
+#[derive(FromRow, Deserialize, Serialize, Clone)]
 pub struct Board {
 	pub name: String,
 	pub topic: String,
@@ -38,6 +40,7 @@ impl BoardManager {
 			pool: pool.clone(),
 		}
 	}
+    
 	pub async fn get(&self, name: &String) -> Option<Board> {
 		sqlx::query_as::<_, Board>(DatabaseQuery::GetBoardByName)
 			.bind(name)
@@ -45,12 +48,14 @@ impl BoardManager {
 			.await
 			.ok()
 	}
+    
 	pub async fn list(&self) -> Vec<Board> {
 		sqlx::query_as::<_, Board>(DatabaseQuery::ListBoards)
 			.fetch_all(&self.pool)
 			.await
 			.unwrap_or(vec![])
 	}
+    
 	pub async fn exists(&self, name: &String) -> bool {
 		sqlx::query_scalar(DatabaseQuery::BoardExists)
 			.bind(name)
@@ -58,25 +63,28 @@ impl BoardManager {
 			.await
 			.unwrap_or(false)
 	}
+    
 	pub async fn list_by_topic(&self, topic: Topic) -> TopicBoards {
 		let boards = sqlx::query_as::<_, Board>(DatabaseQuery::ListBoardsByTopic)
 			.bind(&topic.name)
 			.fetch_all(&self.pool)
 			.await
 			.unwrap_or(vec![]);
+        
 		TopicBoards {
 			topic: topic,
 			boards: boards,
 		}
 	}
+    
 	pub async fn sorted_by_topics(&self) -> Vec<TopicBoards> {
 		let results = sqlx::query_as::<_, Topic>(DatabaseQuery::ListTopics)
 			.fetch_all(&self.pool)
 			.await
 			.unwrap_or(vec![])
 			.into_iter()
-			.map(async |t| {
-				self.list_by_topic(t).await
+			.map(async |topic| {
+				self.list_by_topic(topic).await
 			})
 			.collect::<Vec<_>>();
 		join_all(results).await
