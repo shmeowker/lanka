@@ -2,6 +2,7 @@ use crate::{
     Attachment, AttachmentManager, DatabaseQuery, DateTime, Deserialize, FileSummary, FromRow,
     MySqlPool, Serialize, Utc,
 };
+use ahash::{HashMap, HashMapExt};
 
 
 #[derive(FromRow, Deserialize, Serialize, Clone, PartialEq)]
@@ -11,7 +12,7 @@ pub struct Post {
     pub thread: Option<u64>,
     pub reply: Option<u64>,
     pub content: Option<Box<str>>,
-    #[sqlx(json)]
+    #[sqlx(skip)]
     pub attachments: Box<[Attachment]>,
     pub author: Option<Box<str>>,
     pub created: DateTime<Utc>,
@@ -35,6 +36,33 @@ impl PostManager {
         }
     }
 
+    async fn load_attachments(&self, posts: &mut [Post]) {
+        if posts.is_empty() {
+            return;
+        }
+
+        let attachments = self.attachment.list_assoc(&posts).await;
+
+        let mut attachments_by_post: HashMap<u64, Vec<Attachment>> =
+            HashMap::with_capacity(posts.len());
+
+        for attachment in attachments {
+            if let Some(post_id) = attachment.post {
+                attachments_by_post
+                    .entry(post_id)
+                    .or_default()
+                    .push(attachment);
+            }
+        }
+
+        for post in posts {
+            post.attachments = attachments_by_post
+                .remove(&post.id)
+                .unwrap_or_default()
+                .into_boxed_slice();
+        }
+    }
+
     #[allow(unused)]
     pub async fn post_exists(&self, post_id: &u64) -> bool {
         todo!()
@@ -46,11 +74,16 @@ impl PostManager {
     }
 
     pub async fn get(&self, post_id: &u64) -> Option<Post> {
-        sqlx::query_as::<_, Post>(DatabaseQuery::GetPost)
+        let post = sqlx::query_as::<_, Post>(DatabaseQuery::GetPost)
             .bind(post_id)
             .fetch_one(&self.pool)
             .await
-            .ok()
+            .ok()?;
+
+        let mut posts = vec![post];
+        self.load_attachments(&mut posts).await;
+
+        posts.pop()
     }
 
     /// Create a post, returning its ID on success.
@@ -74,33 +107,44 @@ impl PostManager {
             .bind(author)
             .fetch_one(&self.pool)
             .await?;
+        
         for data in attachments.drain(..) {
             let _ = self.attachment.create(&post_id, data).await;
         }
+        
         if thread.is_some() {
             sqlx::query(DatabaseQuery::BumpThread)
                 .bind(thread)
                 .execute(&self.pool)
                 .await?;
         }
+        
         Ok(post_id)
     }
 
     pub async fn board(&self, board: &String) -> Vec<Post> {
-        sqlx::query_as::<_, Post>(DatabaseQuery::ListThreads)
+        let mut posts = sqlx::query_as::<_, Post>(DatabaseQuery::ListThreads)
             .bind(board)
             .fetch_all(&self.pool)
             .await
-            .unwrap_or(vec![])
+            .unwrap_or(vec![]);
+        
+        self.load_attachments(&mut posts).await;
+
+        posts
     }
 
     pub async fn thread(&self, thread: &u64) -> Vec<Post> {
-        sqlx::query_as::<_, Post>(DatabaseQuery::ListThreadPosts)
+        let mut posts = sqlx::query_as::<_, Post>(DatabaseQuery::ListThreadPosts)
             .bind(thread)
             .bind(thread)
             .fetch_all(&self.pool)
             .await
-            .unwrap_or(vec![])
+            .unwrap_or(vec![]);
+
+        self.load_attachments(&mut posts).await;
+
+        posts
     }
     
     pub async fn count_all(&self) -> u64 {

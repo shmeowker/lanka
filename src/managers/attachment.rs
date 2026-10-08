@@ -1,16 +1,19 @@
 use crate::{
+    FromRow,
     Serialize,
     Deserialize,
 	DatabaseQuery,
 	MySqlPool,
+    Post,
 };
+use sqlx::AssertSqlSafe;
 
 /// (Stored name, size, original name)
 ///
 /// Information about uploaded file to insert into the database.
 pub type FileSummary = (String, usize, String);
 
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[derive(FromRow, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Attachment {
     pub id: u64,
 	pub name: Box<str>,
@@ -58,6 +61,27 @@ impl AttachmentManager {
 			pool: pool.clone(),
 		}
 	}
+
+    pub async fn list_assoc(&self, posts: &[Post]) -> Vec<Attachment> {
+        let placeholders = std::iter::repeat_n("?", posts.len())
+            .collect::<Box<[&str]>>()
+            .join(", ");
+
+        let query = DatabaseQuery::ListAttachmentsForPosts
+            .into_str()
+            .replace("?", &placeholders);
+
+        let mut query = sqlx::query_as::<_, Attachment>(AssertSqlSafe(query));
+
+        for post in posts.iter() {
+            query = query.bind(post.id);
+        }
+
+        query
+            .fetch_all(&self.pool)
+            .await
+            .unwrap_or(vec![])
+    }
 
     #[allow(unused)]
 	pub async fn list_for_post(&self, post_id: u64) -> Vec<Attachment> {

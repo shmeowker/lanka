@@ -5,10 +5,10 @@
         {% for attachment in attachments %}
         <li>
         {% if attachment.is_image() %}
-            <img src="/static/{{ attachment.name }}" />
+            <img src="/static/{{ attachment.name }}">
         
         {% else if attachment.is_video() %}
-            <video src="/uploads/{{ attachment.name }}" />
+            <video src="/static/{{ attachment.name }}" controls></video>
         
         {% else if attachment.is_audio() %}
             <audio src="/static/{{ attachment.name }}" controls></audio>

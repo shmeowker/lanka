@@ -197,7 +197,7 @@ pub async fn create_thread(
                 )
                 .await
             {
-                Ok(_) => Ok(Redirect::to(format!("/{}", board).as_str())),
+                Ok(id) => Ok(Redirect::to(format!("/{board}#{id}").as_str())),
                 Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, "Database error.").into()),
             }
         }
@@ -241,7 +241,7 @@ pub async fn create_post(
                             )
                             .await
                         {
-                            Ok(_) => Ok(Redirect::to(format!("/{board}/{thread}").as_str())),
+                            Ok(id) => Ok(Redirect::to(format!("/{board}/{thread}#{id}").as_str())),
                             Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, "Database error.").into()),
                         }
                     }

@@ -8,6 +8,7 @@ pub enum DatabaseQuery {
     //DeleteAttachmentsByName,
     //DeleteAttachmentById,
     ListAttachmentsForPost,
+    ListAttachmentsForPosts,
     CreateAttachment,
     //ListOrphanedAttachments,
     //DeleteOrphanedAttachments,
@@ -61,12 +62,15 @@ pub enum DatabaseQuery {
 
 impl DatabaseQuery {
     #[inline]
-    const fn into_str(self) -> &'static str {
+    pub const fn into_str(self) -> &'static str {
         // Attention: The queries below are for MariaDB.
         // Not compatible with other databases.
         match self {
             // AttachmentManager queries
             Self::ListAttachmentsForPost => "select * from attachments where post = ?",
+            Self::ListAttachmentsForPosts => {
+                "select * from attachments where post in (?) order by post, id"
+            }
             Self::CreateAttachment => {
                 "insert into attachments (post, name, size, original_name) values (?, ?, ?, ?)"
             }
@@ -78,26 +82,15 @@ impl DatabaseQuery {
             Self::ListBoardsByTopic => "select * from boards where theme = ?",
 
             // PostManager queries
-            Self::PostExists => {
-                "select exists(select 1 from posts where thread is null and id = ?)"
-            }
+            Self::PostExists => "select exists(select 1 from posts where thread is null and id = ?)",
             Self::ThreadExists => "select exists(select 1 from posts where id = ?)",
-            Self::GetPost => {
-                "select posts.*, coalesce((select json_arrayagg(json_object('id', a.id, 'name', a.name, 'post', a.post, 'size', a.size, 'original_name', a.original_name)) from attachments a where a.post = posts.id), '[]') attachments from posts where id = ?"
-            }
-            Self::ListThreads => {
-                "select posts.*, coalesce((select json_arrayagg(json_object('id', a.id, 'name', a.name, 'post', a.post, 'size', a.size, 'original_name', a.original_name)) from attachments a where a.post = posts.id), '[]') attachments from posts where board = ? and thread is null order by bumped desc"
-            }
-            Self::ListThreadPosts => {
-                "select posts.*, coalesce((select json_arrayagg(json_object('id', a.id, 'name', a.name, 'post', a.post, 'size', a.size, 'original_name', a.original_name)) from attachments a where a.post = posts.id), '[]') attachments from posts where id = ? or thread = ?;"
-            }
-            Self::CreatePost => {
-                "insert into posts (board, thread, reply, content, author) values (?, ?, ?, ?, ?) returning id"
-            }
+            Self::GetPost => "select * from posts where id = ?",
+            Self::ListThreads => "select * from posts where board = ? and thread is null order by bumped desc",
+            Self::ListThreadPosts => "select * from posts where id = ? or thread = ?;",
+            Self::CreatePost => "insert into posts (board, thread, reply, content, author) values (?, ?, ?, ?, ?) returning id",
             Self::BumpThread => "update posts set bumped = current_timestamp() where id = ?",
-            Self::CountExistingPosts => {
-                "select TABLE_ROWS from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA = 'lanka' and TABLE_NAME = 'posts'"
-            } // Replace 'lanka' to your database name
+            Self::CountExistingPosts => "select TABLE_ROWS from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA = 'lanka' and TABLE_NAME = 'posts'",
+            // Replace 'lanka' to your database name                                                            ^^^^^
             Self::CountExistingThreads => "select count(*) from posts where thread is null",
             Self::CountTotalPosts => "select id from posts order by id desc limit 1",
 
