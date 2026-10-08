@@ -1,4 +1,6 @@
 use crate::{
+    Serialize,
+    Deserialize,
 	DatabaseQuery,
 	MySqlPool,
 };
@@ -8,11 +10,42 @@ use crate::{
 /// Information about uploaded file to insert into the database.
 pub type FileSummary = (String, usize, String);
 
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Attachment {
-	pub name: String,
+    pub id: u64,
+	pub name: Box<str>,
 	pub post: Option<u64>,
 	pub size: u64,
+    pub original_name: Option<Box<str>>,
 }
+
+impl Attachment {
+    fn extension(&self) -> Option<&str> {
+        self.name.rfind('.').map(|i| &self.name[i+1..])
+    }
+
+    pub fn is_video(&self) -> bool {
+        if let Some(ext) = self.extension() {
+            return matches!(ext, "mp4" | "avi" | "flv" | "mov" | "ogg" | "ogv" | "webm");
+        }
+        false
+    }
+
+    pub fn is_audio(&self) -> bool {
+        if let Some(ext) = self.extension() {
+            return matches!(ext, "mp3" | "wav" | "aac" | "m4a" | "oga" | "ogg" | "flac" | "opus");
+        }
+        false
+    }
+
+    pub fn is_image(&self) -> bool {
+        if let Some(ext) = self.extension() {
+            return matches!(ext, "jpg" | "jpeg" | "png" | "gif" | "webp" | "avif" | "svg");
+        }
+        false
+    }
+}
+
 
 #[derive(Clone)]
 pub struct AttachmentManager {

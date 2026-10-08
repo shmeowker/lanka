@@ -1,5 +1,5 @@
 use crate::{
-    AttachmentManager, DatabaseQuery, DateTime, Deserialize, FileSummary, FromRow,
+    Attachment, AttachmentManager, DatabaseQuery, DateTime, Deserialize, FileSummary, FromRow,
     MySqlPool, Serialize, Utc,
 };
 
@@ -7,12 +7,13 @@ use crate::{
 #[derive(FromRow, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Post {
     pub id: u64,
-    pub board: String,
+    pub board: Box<str>,
     pub thread: Option<u64>,
     pub reply: Option<u64>,
-    pub content: Option<String>,
-    pub attachments: Option<String>,
-    pub author: Option<String>,
+    pub content: Option<Box<str>>,
+    #[sqlx(json)]
+    pub attachments: Box<[Attachment]>,
+    pub author: Option<Box<str>>,
     pub created: DateTime<Utc>,
     pub bumped: DateTime<Utc>,
     pub pinned: Option<bool>,

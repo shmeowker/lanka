@@ -1,6 +1,30 @@
-{%- if let Some(attachments) = attachments -%}
+{%- if !attachments.is_empty() -%}
 <details open>
 	<summary>Attachments</summary>
-	<ol class="attachments" data-json="{{ attachments }}"></ol>
+	<ol class="attachments" data-json="">
+        {% for attachment in attachments %}
+        <li>
+        {% if attachment.is_image() %}
+            <img src="/static/{{ attachment.name }}" />
+        
+        {% else if attachment.is_video() %}
+            <video src="/uploads/{{ attachment.name }}" />
+        
+        {% else if attachment.is_audio() %}
+            <audio src="/static/{{ attachment.name }}" controls></audio>
+        
+        {% else %}
+            <a href="/static/{{ attachment.name }}" download class="preview-generic">
+            {% if let Some(original_name) = attachment.original_name %}
+                {{ original_name }}
+            {% else %}
+                {{ attachment.name }}
+            {% endif %}
+                ({{ attachment.size }} bytes)
+            </a>
+        {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
 </details>
 {%- endif %}

@@ -197,7 +197,8 @@ form {
         & textarea {
             width: 100%;
             resize: vertical;
-            min-height: 1rem;
+            min-block-size: 3lh;
+            field-sizing: content;
         }
         & ::file-selector-button {
             font-family: inherit;

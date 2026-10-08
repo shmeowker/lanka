@@ -6,15 +6,14 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use crate::{
-    CurrentUser, FileSummary, IntoResponse, LState, Multipart, ORejection, Path, Redirect,
-    StatusCode,
+    CurrentUser, FileSummary, IntoResponse, LState, Multipart, Rejection, Path, Redirect,
+    StatusCode, POST_CONTENT_SIZE_LIMIT
 };
 
 enum FileUploadError {
     MultipartError(String),
     EmptyFile(String),
     StorageError(String),
-    NamelessFile,
 }
 
 struct ParsedForm {
@@ -24,19 +23,19 @@ struct ParsedForm {
     anonymous: bool,
 }
 
-async fn handle_upload(mut field: Field<'_>) -> Result<FileSummary, FileUploadError> {
+async fn handle_upload(mut field: Field<'_>) -> Result<Option<FileSummary>, FileUploadError> {
     let Some(original_name) = field
         .file_name()
         .filter(|n| !n.is_empty())
         .map(str::to_owned)
     else {
-        return Err(FileUploadError::NamelessFile);
+        return Ok(None);
     };
     let ext = StdPath::new(&original_name)
         .extension()
         .and_then(std::ffi::OsStr::to_str)
         .filter(|s| !s.is_empty())
-        .map(|s| format!(".{s}"))
+        .map(|s| format!(".{}", s.to_lowercase()))
         .unwrap_or_default();
 
     let uuid = Uuid::new_v4();
@@ -83,10 +82,10 @@ async fn handle_upload(mut field: Field<'_>) -> Result<FileSummary, FileUploadEr
     let path = temp_path.with_file_name(&name);
     let _ = rename(temp_path, path).await;
 
-    Ok((name, size, original_name))
+    Ok(Some((name, size, original_name)))
 }
 
-async fn parse_form(mut multipart: Multipart) -> Result<ParsedForm, ORejection> {
+async fn parse_form(mut multipart: Multipart) -> Result<ParsedForm, Rejection> {
     let mut reply: Option<u64> = None;
     let mut content: Option<String> = None;
     let mut attachments: Vec<FileSummary> = vec![];
@@ -103,7 +102,15 @@ async fn parse_form(mut multipart: Multipart) -> Result<ParsedForm, ORejection> 
             "content" => {
                 content = match field.text().await.ok() {
                     Some(empty) if empty.is_empty() => None,
-                    Some(nonempty) => Some(nonempty),
+                    Some(nonempty) => {
+                        if nonempty.len() > POST_CONTENT_SIZE_LIMIT {
+                            return Err((
+                                StatusCode::PAYLOAD_TOO_LARGE,
+                                "Post content is too long."
+                            ).into());
+                        }
+                        Some(nonempty)
+                    },
                     None => None,
                 };
             }
@@ -118,29 +125,25 @@ async fn parse_form(mut multipart: Multipart) -> Result<ParsedForm, ORejection> 
                         return Err((
                             StatusCode::BAD_REQUEST,
                             format!("Failed to upload {name}.")
-                        ));
+                        ).into());
                     }
                     Err(FileUploadError::EmptyFile(name)) => {
                         return Err((
                             StatusCode::BAD_REQUEST,
                             format!("The file {name} is empty."),
-                        ));
+                        ).into());
                     }
                     Err(FileUploadError::StorageError(name)) => {
                         return Err((
                             StatusCode::INTERNAL_SERVER_ERROR,
                             format!("Failed to store {name}."),
-                        ));
-                    }
-                    Err(FileUploadError::NamelessFile) => {
-                        return Err((
-                            StatusCode::BAD_REQUEST,
-                            "Some of the files has no name.".to_owned(),
-                        ));
+                        ).into());
                     }
                 };
 
-                attachments.push(file);
+                if let Some(file) = file {
+                    attachments.push(file);
+                }
             }
             &_ => (),
         }
@@ -149,8 +152,8 @@ async fn parse_form(mut multipart: Multipart) -> Result<ParsedForm, ORejection> 
     if attachments.is_empty() && content.is_none() {
         return Err((
             StatusCode::BAD_REQUEST,
-            "No valid content provided.".to_owned(),
-        ));
+            "No valid content provided.",
+        ).into());
     }
 
     Ok(ParsedForm {
@@ -166,7 +169,7 @@ pub async fn create_thread(
     Path(location): Path<Vec<String>>,
     CurrentUser(user): CurrentUser,
     multipart: Multipart,
-) -> Result<impl IntoResponse, ORejection> {
+) -> Result<impl IntoResponse, Rejection> {
     let parsed = parse_form(multipart).await?;
 
     let author = match parsed.anonymous {
@@ -180,7 +183,7 @@ pub async fn create_thread(
     match &location[..] {
         [board] => {
             if !state.board.exists(board).await {
-                return Err((StatusCode::BAD_REQUEST, "Invalid board.".to_owned()));
+                return Err((StatusCode::BAD_REQUEST, "Invalid board.").into());
             }
             match state
                 .post
@@ -195,10 +198,10 @@ pub async fn create_thread(
                 .await
             {
                 Ok(_) => Ok(Redirect::to(format!("/{}", board).as_str())),
-                Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, "Database error.".to_owned())),
+                Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, "Database error.").into()),
             }
         }
-        _ => Err((StatusCode::BAD_REQUEST, "Invalid form URL.".to_owned())),
+        _ => Err((StatusCode::BAD_REQUEST, "Invalid form URL.").into()),
     }
 }
 
@@ -207,7 +210,7 @@ pub async fn create_post(
     Path(location): Path<Vec<String>>,
     CurrentUser(user): CurrentUser,
     multipart: Multipart,
-) -> Result<impl IntoResponse, ORejection> {
+) -> Result<impl IntoResponse, Rejection> {
     let parsed = parse_form(multipart).await?;
 
     let author = match parsed.anonymous {
@@ -221,7 +224,7 @@ pub async fn create_post(
     match &location[..] {
         [board, thread] => {
             if !state.board.exists(board).await {
-                return Err((StatusCode::BAD_REQUEST, "Invalid board.".to_owned()));
+                return Err((StatusCode::BAD_REQUEST, "Invalid board.".to_owned()).into());
             }
             match thread.parse::<u64>() {
                 Ok(thread) => match state.post.get(&thread).await {
@@ -239,14 +242,14 @@ pub async fn create_post(
                             .await
                         {
                             Ok(_) => Ok(Redirect::to(format!("/{board}/{thread}").as_str())),
-                            Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, "Database error.".to_owned())),
+                            Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, "Database error.").into()),
                         }
                     }
-                    None => Err((StatusCode::BAD_REQUEST, "Invalid thread ID.".to_owned())),
+                    None => Err((StatusCode::BAD_REQUEST, "Invalid thread ID.").into()),
                 },
-                Err(_) => Err((StatusCode::BAD_REQUEST, "Invalid thread.".to_owned())),
+                Err(_) => Err((StatusCode::BAD_REQUEST, "Invalid thread.").into()),
             }
         }
-        _ => Err((StatusCode::BAD_REQUEST, "Invalid form URL.".to_owned())),
+        _ => Err((StatusCode::BAD_REQUEST, "Invalid form URL.").into()),
     }
 }

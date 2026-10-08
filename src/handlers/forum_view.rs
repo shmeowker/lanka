@@ -1,5 +1,5 @@
 use crate::{
-    Board, CurrentUser, Deref, HtmlTemplate, IntoResponse, LState, ORejection, Path, Post,
+    Board, CurrentUser, Deref, HtmlTemplate, IntoResponse, LState, Rejection, Path, Post,
     StatusCode, TITLE, Template, User,
 };
 
@@ -9,7 +9,7 @@ struct ForumTemplate {
     boards: Vec<Board>,
     board: Board,
     thread: Option<u64>,
-    posts: String,
+    posts: Box<str>,
     user: Option<User>,
 }
 
@@ -36,20 +36,20 @@ impl ForumTemplate {
         }
     }
 
-    fn render_board(posts: Vec<Post>) -> String {
+    fn render_board(posts: Vec<Post>) -> Box<str> {
         let mut buffer = String::with_capacity(4096);
         for post in posts {
             let _ = ThreadTemplate { post }.render_into(&mut buffer);
         }
 
-        buffer
+        buffer.into_boxed_str()
     }
 
-    fn render_thread(posts: Vec<Post>) -> String {
+    fn render_thread(posts: Vec<Post>) -> Box<str> {
         let mut buffer = String::with_capacity(4096);
         let mut op_posts = std::collections::HashSet::new();
-        let mut op: Option<String> = None;
-
+        let mut op: Option<Box<str>> = None;
+        
         if let Some(root) = posts.first() {
             op = root.author.clone();
             op_posts.insert(root.id);
@@ -75,7 +75,7 @@ impl ForumTemplate {
                 .render_into(&mut buffer);
         }
 
-        buffer
+        buffer.into_boxed_str()
     }
 }
 
@@ -98,13 +98,13 @@ pub async fn render_board(
     Path(board): Path<String>,
     state: LState,
     CurrentUser(user): CurrentUser,
-) -> Result<impl IntoResponse, ORejection> {
+) -> Result<impl IntoResponse, Rejection> {
     let posts = state.post.board(&board).await;
     let Some(board) = state.board.get(&board).await else {
         return Err((
             StatusCode::NOT_FOUND,
             format!("Board '{board}' does not exists."),
-        ));
+        ).into());
     };
 
     let template = ForumTemplate::new(state, board, None, posts, user).await;
@@ -116,13 +116,13 @@ pub async fn render_thread(
     Path((board, thread)): Path<(String, u64)>,
     state: LState,
     CurrentUser(user): CurrentUser,
-) -> Result<impl IntoResponse, ORejection> {
+) -> Result<impl IntoResponse, Rejection> {
     let posts = state.post.thread(&thread).await;
     let Some(board) = state.board.get(&board).await else {
         return Err((
             StatusCode::NOT_FOUND,
             format!("Board '{board}' does not exists."),
-        ));
+        ).into());
     };
 
     let template = ForumTemplate::new(state, board, Some(thread), posts, user).await;
